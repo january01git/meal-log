@@ -1,0 +1,19 @@
+{
+  "name": "食事記録",
+  "short_name": "食事記録",
+  "description": "毎日の食事を写真で記録するアプリ",
+  "start_url": "./meal-log.html",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#FAFAF8",
+  "theme_color": "#D97B4F",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

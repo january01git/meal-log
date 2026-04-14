@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#D97B4F">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="食事記録">
+  <link rel="manifest" href="manifest.json">
+  <!-- アイコンを差し替えるには icon.svg を置き換えるだけでOK (推奨: 512×512px の正方形) -->
+  <link rel="apple-touch-icon" href="icon.svg">
+  <title>食事記録</title>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
+    }
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent:      #D97B4F;
+      --accent-dark: #C4693D;
+      --bg:          #FAFAF8;
+      --surface:     #FFFFFF;
+      --text:        #1A1A1A;
+      --text-sub:    #888888;
+      --line:        #E8E8E4;
+      --danger:      #E53E3E;
+      --radius:      14px;
+      --shadow:      0 2px 12px rgba(0,0,0,0.08);
+      --safe-top:    env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-left:   env(safe-area-inset-left, 0px);
+      --safe-right:  env(safe-area-inset-right, 0px);
+    }
+
+    html, body {
+      height: 100%;
+      overscroll-behavior: none;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    #app {
+      width: 100%;
+      max-width: 430px;
+      height: 100svh;
+      height: 100vh; /* fallback */
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    #app-header {
+      flex-shrink: 0;
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      padding-top: calc(10px + var(--safe-top));
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 10;
+    }
+
+    .date-nav {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .nav-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: none;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.12s;
+      flex-shrink: 0;
+    }
+    .nav-btn:active { background: var(--line); }
+
+    #date-display {
+      flex: 1;
+      text-align: center;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      min-width: 0;
+    }
+    #date-display .date-main {
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #date-display .date-sub {
+      font-size: 10px;
+      color: var(--accent);
+      font-weight: 700;
+      min-height: 13px;
+      letter-spacing: 0.03em;
+    }
+
+    /* View toggle */
+    .view-toggle {
+      display: flex;
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 2px;
+      gap: 1px;
+      flex-shrink: 0;
+    }
+    .view-toggle-btn {
+      border: none;
+      background: none;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-sub);
+      padding: 4px 9px;
+      border-radius: 6px;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.12s, color 0.12s;
+      white-space: nowrap;
+    }
+    .view-toggle-btn.active {
+      background: var(--surface);
+      color: var(--accent);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.10);
+    }
+
+    #add-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      font-size: 24px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 3px 10px rgba(217,123,79,0.4);
+      transition: background 0.12s, transform 0.1s;
+      flex-shrink: 0;
+    }
+    #add-btn:active { background: var(--accent-dark); transform: scale(0.9); }
+
+    /* ── Timeline ── */
+    #timeline-view {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 18px 14px;
+      padding-bottom: calc(24px + var(--safe-bottom));
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      padding: 60px 24px;
+      color: var(--text-sub);
+      text-align: center;
+    }
+    .empty-state svg { opacity: 0.25; }
+    .empty-state p { font-size: 14px; line-height: 1.7; }
+
+    .timeline-list {
+      position: relative;
+      padding-left: 50px;
+    }
+    .timeline-list::before {
+      content: '';
+      position: absolute;
+      left: 18px;
+      top: 8px;
+      bottom: 8px;
+      width: 2px;
+      background: var(--line);
+      border-radius: 1px;
+    }
+
+    .meal-card {
+      position: relative;
+      margin-bottom: 18px;
+      animation: fadeSlideIn 0.28s ease both;
+    }
+    .meal-card::before {
+      content: '';
+      position: absolute;
+      left: -37px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid var(--surface);
+      box-shadow: 0 0 0 2px var(--accent);
+    }
+
+    .time-badge {
+      position: absolute;
+      left: -50px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-sub);
+      width: 38px;
+      text-align: right;
+      line-height: 1;
+    }
+
+    .card-inner {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: flex;
+    }
+
+    .meal-photo {
+      width: 88px;
+      height: 88px;
+      object-fit: cover;
+      flex-shrink: 0;
+      display: block;
+    }
+
+    .card-body {
+      flex: 1;
+      padding: 10px 11px 9px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-width: 0;
+    }
+
+    .card-time-full {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .card-note {
+      font-size: 13px;
+      color: var(--text-sub);
+      line-height: 1.5;
+      flex: 1;
+      margin-top: 4px;
+      word-break: break-all;
+    }
+
+    .card-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 2px;
+      margin-top: 5px;
+    }
+
+    .delete-btn, .edit-btn {
+      border: none;
+      background: none;
+      font-size: 15px;
+      cursor: pointer;
+      padding: 3px 5px;
+      border-radius: 6px;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      transition: color 0.12s;
+    }
+    .delete-btn { color: #CCCCCC; }
+    .delete-btn:active { color: var(--danger); }
+    .edit-btn { color: #CCCCCC; }
+    .edit-btn:active { color: var(--accent); }
+
+    .card-note-textarea {
+      font-size: 14px; /* 16px would prevent zoom, but 14 is fine with explicit prevention */
+      color: var(--text);
+      background: var(--bg);
+      border: 1.5px solid var(--accent);
+      border-radius: 8px;
+      padding: 6px 8px;
+      resize: none;
+      font-family: inherit;
+      outline: none;
+      width: 100%;
+      height: 58px;
+      margin-top: 4px;
+      line-height: 1.5;
+      -webkit-appearance: none;
+    }
+
+    .note-edit-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .note-cancel-btn, .note-save-btn {
+      border: none;
+      border-radius: 7px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 6px 12px;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      transition: opacity 0.12s;
+      flex: 1;
+    }
+    .note-cancel-btn:active, .note-save-btn:active { opacity: 0.7; }
+    .note-cancel-btn { background: var(--line); color: var(--text-sub); }
+    .note-save-btn   { background: var(--accent); color: #fff; }
+
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Month View ── */
+    #month-view {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 0 0 calc(24px + var(--safe-bottom));
+    }
+    #month-view.hidden, #timeline-view.hidden { display: none; }
+
+    .month-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      padding: 60px 24px;
+      color: var(--text-sub);
+      text-align: center;
+    }
+    .month-empty svg { opacity: 0.25; }
+    .month-empty p { font-size: 14px; line-height: 1.7; }
+
+    .month-day-section {
+      border-bottom: 1px solid var(--line);
+      animation: fadeSlideIn 0.25s ease both;
+    }
+    .month-day-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px 8px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .month-day-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .month-day-label.today { color: var(--accent); }
+    .month-day-count {
+      font-size: 11px;
+      color: var(--text-sub);
+      font-weight: 600;
+    }
+    .month-day-arrow {
+      font-size: 14px;
+      color: var(--text-sub);
+    }
+
+    .month-photo-row {
+      display: flex;
+      gap: 3px;
+      padding: 0 14px 12px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .month-photo-row::-webkit-scrollbar { display: none; }
+
+    .month-photo-chip {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .month-photo-chip img {
+      width: 76px;
+      height: 76px;
+      object-fit: cover;
+      border-radius: 10px;
+      display: block;
+      border: 2px solid transparent;
+      transition: border-color 0.12s;
+    }
+    .month-photo-chip img:active { border-color: var(--accent); }
+    .month-chip-time {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-sub);
+    }
+
+    /* Summary bar in month view */
+    .month-summary-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .month-stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .month-stat-value {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--accent);
+      line-height: 1;
+    }
+    .month-stat-label {
+      font-size: 10px;
+      color: var(--text-sub);
+      font-weight: 600;
+      margin-top: 2px;
+    }
+    .month-stat-divider {
+      width: 1px;
+      height: 28px;
+      background: var(--line);
+    }
+
+    /* ── Capture View ── */
+    #capture-view {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 100;
+      background: #111;
+      display: flex;
+      flex-direction: column;
+    }
+    #capture-view.hidden { display: none; }
+
+    #camera-preview {
+      width: 100%;
+      flex: 1;
+      object-fit: cover;
+      display: block;
+      background: #000;
+      min-height: 0;
+    }
+    #camera-preview.hidden { display: none; }
+
+    #captured-img {
+      width: 100%;
+      flex: 1;
+      object-fit: contain;
+      background: #000;
+      display: block;
+      min-height: 0;
+    }
+    #captured-img.hidden { display: none; }
+
+    #photo-canvas { display: none; }
+
+    .capture-bottom {
+      background: #1A1A1A;
+      padding: 14px 14px;
+      padding-bottom: calc(14px + var(--safe-bottom));
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .capture-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .cap-btn {
+      border: none;
+      border-radius: 50px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 10px 18px;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      transition: opacity 0.12s, transform 0.1s;
+    }
+    .cap-btn:active { transform: scale(0.94); opacity: 0.8; }
+
+    #snap-btn {
+      width: 62px;
+      height: 62px;
+      border-radius: 50%;
+      background: #fff;
+      border: 4px solid #555;
+      flex-shrink: 0;
+      align-self: center;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #snap-btn:active { background: #ddd; }
+
+    #upload-label {
+      background: #333;
+      color: #fff;
+      border-radius: 50px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 10px 16px;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      white-space: nowrap;
+      display: block;
+    }
+    #upload-input { display: none; }
+
+    #switch-btn {
+      background: #333;
+      color: #fff;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    #retake-btn { background: #333; color: #fff; }
+
+    #note-input {
+      background: #2A2A2A;
+      border: 1px solid #444;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 16px; /* prevent iOS auto-zoom */
+      padding: 10px 12px;
+      resize: none;
+      font-family: inherit;
+      outline: none;
+      width: 100%;
+      height: 58px;
+      -webkit-appearance: none;
+    }
+    #note-input::placeholder { color: #666; }
+    #note-input:focus { border-color: var(--accent); }
+
+    .capture-footer {
+      display: flex;
+      gap: 10px;
+    }
+
+    #cancel-btn { background: #333; color: #aaa; flex: 1; }
+    #save-btn   { background: var(--accent); color: #fff; flex: 2; }
+    #save-btn:disabled { background: #444; color: #666; }
+
+    /* ── Photo Lightbox ── */
+    #lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: rgba(0,0,0,0.92);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: calc(16px + var(--safe-top)) 16px calc(16px + var(--safe-bottom));
+    }
+    #lightbox.hidden { display: none; }
+    #lightbox-img {
+      max-width: 100%;
+      max-height: 75vh;
+      object-fit: contain;
+      border-radius: 12px;
+    }
+    #lightbox-info {
+      color: #fff;
+      text-align: center;
+      margin-top: 12px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    #lightbox-info .lb-note {
+      font-size: 13px;
+      color: #aaa;
+      margin-top: 4px;
+      font-weight: 400;
+    }
+    #lightbox-close {
+      position: absolute;
+      top: calc(16px + var(--safe-top));
+      right: 16px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+      border: none;
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: calc(24px + var(--safe-bottom));
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: rgba(26,26,26,0.92);
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 50px;
+      font-size: 13px;
+      font-weight: 600;
+      z-index: 300;
+      transition: transform 0.3s ease;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+<div id="app">
+  <!-- Header -->
+  <header id="app-header">
+    <div class="date-nav">
+      <button class="nav-btn" id="prev-btn" aria-label="前へ">‹</button>
+      <div id="date-display">
+        <div class="date-main" id="date-main-text"></div>
+        <div class="date-sub" id="date-sub-text"></div>
+      </div>
+      <button class="nav-btn" id="next-btn" aria-label="次へ">›</button>
+    </div>
+    <div class="view-toggle">
+      <button class="view-toggle-btn active" id="day-view-btn">日</button>
+      <button class="view-toggle-btn" id="month-view-btn">月</button>
+    </div>
+    <button id="add-btn" aria-label="食事を追加">+</button>
+  </header>
+
+  <!-- Timeline (Day View) -->
+  <main id="timeline-view">
+    <div id="timeline-container"></div>
+  </main>
+
+  <!-- Month View -->
+  <section id="month-view" class="hidden">
+    <div id="month-container"></div>
+  </section>
+
+  <!-- Capture Overlay -->
+  <div id="capture-view" class="hidden">
+    <video id="camera-preview" autoplay playsinline muted></video>
+    <img id="captured-img" class="hidden" alt="撮影した写真">
+    <canvas id="photo-canvas"></canvas>
+
+    <div class="capture-bottom">
+      <div class="capture-actions" id="camera-controls">
+        <label id="upload-label">
+          📁 ライブラリ
+          <input type="file" id="upload-input" accept="image/*">
+        </label>
+        <button id="snap-btn" aria-label="撮影"></button>
+        <button class="cap-btn" id="switch-btn" aria-label="カメラ切替">🔄</button>
+      </div>
+      <div class="capture-actions" id="review-controls" style="display:none">
+        <button class="cap-btn" id="retake-btn">撮り直す</button>
+      </div>
+      <textarea id="note-input" placeholder="メモ（任意）"></textarea>
+      <div class="capture-footer">
+        <button class="cap-btn" id="cancel-btn">キャンセル</button>
+        <button class="cap-btn" id="save-btn" disabled>保存する</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div id="lightbox" class="hidden">
+  <button id="lightbox-close">✕</button>
+  <img id="lightbox-img" alt="">
+  <div id="lightbox-info">
+    <div id="lightbox-datetime"></div>
+    <div id="lightbox-note" class="lb-note"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── State ─────────────────────────────────────────────
+  const state = {
+    view: 'day',                                    // 'day' | 'month'
+    currentDateKey: todayKey(),                     // YYYY-MM-DD
+    currentMonthKey: todayKey().slice(0, 7),        // YYYY-MM
+    entries: [],
+    cameraStream: null,
+    facingMode: 'environment',
+    capturedDataUrl: null,
+    editingId: null,
+  };
+
+  // ── Helpers ───────────────────────────────────────────
+  function todayKey() { return new Date().toLocaleDateString('sv'); }
+
+  function dateKeyToDate(key) { return new Date(key + 'T00:00:00'); }
+
+  function shiftDate(key, days) {
+    const d = dateKeyToDate(key);
+    d.setDate(d.getDate() + days);
+    return d.toLocaleDateString('sv');
+  }
+
+  function shiftMonth(monthKey, delta) {
+    const [y, m] = monthKey.split('-').map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    return d.toLocaleDateString('sv').slice(0, 7);
+  }
+
+  function formatDisplayDate(key) {
+    const d = dateKeyToDate(key);
+    const ww = ['日','月','火','水','木','金','土'];
+    return `${d.getMonth()+1}月${d.getDate()}日（${ww[d.getDay()]}）`;
+  }
+
+  function formatDisplayMonth(monthKey) {
+    const [y, m] = monthKey.split('-');
+    return `${y}年${parseInt(m)}月`;
+  }
+
+  function formatTime(iso) {
+    const d = new Date(iso);
+    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
+
+  function formatDatetimeFull(iso) {
+    const d = new Date(iso);
+    const ww = ['日','月','火','水','木','金','土'];
+    return `${d.getMonth()+1}月${d.getDate()}日（${ww[d.getDay()]}） ${formatTime(iso)}`;
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function showToast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 2400);
+  }
+
+  // ── Storage ───────────────────────────────────────────
+  const STORAGE_KEY = 'meallog_v1';
+
+  function loadEntries() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+    catch { return []; }
+  }
+
+  function saveEntries(arr) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); }
+    catch { showToast('⚠️ ストレージ満杯です。古い記録を削除してください。'); }
+  }
+
+  function addEntry(e)   { state.entries.push(e); saveEntries(state.entries); }
+
+  function deleteEntry(id) {
+    state.entries = state.entries.filter(e => e.id !== id);
+    saveEntries(state.entries);
+  }
+
+  function updateEntryNote(id, note) {
+    const e = state.entries.find(e => e.id === id);
+    if (e) { e.note = note; saveEntries(state.entries); }
+  }
+
+  function getEntriesForDate(key) {
+    return state.entries
+      .filter(e => e.dateKey === key)
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  }
+
+  function getEntriesForMonth(monthKey) {
+    return state.entries
+      .filter(e => e.dateKey.startsWith(monthKey))
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  }
+
+  // ── Image Compression ────────────────────────────────
+  function compressImage(source, callback) {
+    const canvas = document.getElementById('photo-canvas');
+    const ctx = canvas.getContext('2d');
+    const MAX = 900;
+    let w = source.naturalWidth || source.videoWidth;
+    let h = source.naturalHeight || source.videoHeight;
+    if (!w || !h) { w = 900; h = 900; }
+    if (w > MAX || h > MAX) {
+      if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+      else       { w = Math.round(w * MAX / h); h = MAX; }
+    }
+    canvas.width = w; canvas.height = h;
+    ctx.drawImage(source, 0, 0, w, h);
+    callback(canvas.toDataURL('image/jpeg', 0.72));
+  }
+
+  // ── Header Render ────────────────────────────────────
+  function renderHeader() {
+    const isDay = state.view === 'day';
+    document.getElementById('date-main-text').textContent = isDay
+      ? formatDisplayDate(state.currentDateKey)
+      : formatDisplayMonth(state.currentMonthKey);
+    document.getElementById('date-sub-text').textContent = isDay && state.currentDateKey === todayKey() ? '今日' : '';
+    document.getElementById('day-view-btn').classList.toggle('active', isDay);
+    document.getElementById('month-view-btn').classList.toggle('active', !isDay);
+    document.getElementById('add-btn').style.display = isDay ? '' : 'none';
+  }
+
+  // ── Timeline (Day View) Render ───────────────────────
+  function renderTimeline() {
+    renderHeader();
+    const key = state.currentDateKey;
+    const entries = getEntriesForDate(key);
+    const container = document.getElementById('timeline-container');
+
+    if (entries.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
+            <circle cx="32" cy="32" r="30" stroke="#888" stroke-width="2"/>
+            <path d="M20 26 Q20 18 28 18 Q32 18 32 22 Q32 18 36 18 Q44 18 44 26 Q44 34 32 42 Q20 34 20 26Z" stroke="#888" stroke-width="2" fill="none"/>
+          </svg>
+          <p>この日の食事記録はありません<br>＋ボタンで追加しましょう</p>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="timeline-list">
+        ${entries.map((e, i) => `
+          <div class="meal-card" style="animation-delay:${i*55}ms" data-id="${e.id}">
+            <div class="time-badge">${formatTime(e.timestamp)}</div>
+            <div class="card-inner">
+              <img class="meal-photo js-open-lb" src="${e.photo}" alt="食事の写真"
+                   loading="lazy" data-id="${e.id}" style="cursor:pointer">
+              <div class="card-body">
+                <div class="card-time-full">${formatTime(e.timestamp)}</div>
+                ${state.editingId === e.id ? `
+                  <textarea class="card-note-textarea" data-id="${e.id}">${escapeHtml(e.note || '')}</textarea>
+                  <div class="note-edit-actions">
+                    <button class="note-cancel-btn" data-id="${e.id}">キャンセル</button>
+                    <button class="note-save-btn"   data-id="${e.id}">保存</button>
+                  </div>
+                ` : `
+                  ${e.note
+                    ? `<div class="card-note">${escapeHtml(e.note)}</div>`
+                    : '<div class="card-note" style="color:#bbb;font-size:12px">メモなし</div>'}
+                  <div class="card-footer">
+                    <button class="edit-btn"   data-id="${e.id}" aria-label="編集">✏️</button>
+                    <button class="delete-btn" data-id="${e.id}" aria-label="削除">🗑</button>
+                  </div>
+                `}
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>`;
+  }
+
+  // ── Month View Render ────────────────────────────────
+  function renderMonthView() {
+    renderHeader();
+    const monthKey = state.currentMonthKey;
+    const entries = getEntriesForMonth(monthKey);
+    const container = document.getElementById('month-container');
+
+    if (entries.length === 0) {
+      container.innerHTML = `
+        <div class="month-empty">
+          <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
+            <circle cx="32" cy="32" r="30" stroke="#888" stroke-width="2"/>
+            <path d="M20 26 Q20 18 28 18 Q32 18 32 22 Q32 18 36 18 Q44 18 44 26 Q44 34 32 42 Q20 34 20 26Z" stroke="#888" stroke-width="2" fill="none"/>
+          </svg>
+          <p>この月の食事記録はありません</p>
+        </div>`;
+      return;
+    }
+
+    // Group by dateKey
+    const byDay = {};
+    for (const e of entries) {
+      if (!byDay[e.dateKey]) byDay[e.dateKey] = [];
+      byDay[e.dateKey].push(e);
+    }
+    const days = Object.keys(byDay).sort();
+    const today = todayKey();
+    const totalPhotos = entries.length;
+    const activeDays = days.length;
+
+    container.innerHTML = `
+      <div class="month-summary-bar">
+        <div class="month-stat">
+          <div class="month-stat-value">${activeDays}</div>
+          <div class="month-stat-label">記録した日</div>
+        </div>
+        <div class="month-stat-divider"></div>
+        <div class="month-stat">
+          <div class="month-stat-value">${totalPhotos}</div>
+          <div class="month-stat-label">食事の写真</div>
+        </div>
+        <div class="month-stat-divider"></div>
+        <div class="month-stat">
+          <div class="month-stat-value">${Math.round(totalPhotos / activeDays * 10) / 10}</div>
+          <div class="month-stat-label">1日平均</div>
+        </div>
+      </div>
+      ${days.map((dk, i) => {
+        const dayEntries = byDay[dk];
+        const d = dateKeyToDate(dk);
+        const ww = ['日','月','火','水','木','金','土'];
+        const label = `${d.getMonth()+1}月${d.getDate()}日（${ww[d.getDay()]}）`;
+        const isToday = dk === today;
+        return `
+          <div class="month-day-section" style="animation-delay:${i*30}ms">
+            <div class="month-day-header js-goto-day" data-datekey="${dk}">
+              <div class="month-day-label${isToday ? ' today' : ''}">${label}</div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <div class="month-day-count">${dayEntries.length}食</div>
+                <div class="month-day-arrow">›</div>
+              </div>
+            </div>
+            <div class="month-photo-row">
+              ${dayEntries.map(e => `
+                <div class="month-photo-chip js-open-lb" data-id="${e.id}">
+                  <img src="${e.photo}" alt="" loading="lazy">
+                  <div class="month-chip-time">${formatTime(e.timestamp)}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>`;
+      }).join('')}`;
+  }
+
+  // ── View Switching ───────────────────────────────────
+  function switchView(view) {
+    state.view = view;
+    state.editingId = null;
+    const isDay = view === 'day';
+    document.getElementById('timeline-view').classList.toggle('hidden', !isDay);
+    document.getElementById('month-view').classList.toggle('hidden', isDay);
+    if (isDay) renderTimeline();
+    else renderMonthView();
+  }
+
+  // ── Lightbox ─────────────────────────────────────────
+  function openLightbox(id) {
+    const entry = state.entries.find(e => e.id === id);
+    if (!entry) return;
+    document.getElementById('lightbox-img').src = entry.photo;
+    document.getElementById('lightbox-datetime').textContent = formatDatetimeFull(entry.timestamp);
+    document.getElementById('lightbox-note').textContent = entry.note || '';
+    document.getElementById('lightbox').classList.remove('hidden');
+  }
+
+  function closeLightbox() {
+    document.getElementById('lightbox').classList.add('hidden');
+    document.getElementById('lightbox-img').src = '';
+  }
+
+  // ── Camera ───────────────────────────────────────────
+  let hasCameraSupport = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+
+  async function startCamera() {
+    stopCamera();
+    if (!hasCameraSupport) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: state.facingMode }, width: { ideal: 1280 }, height: { ideal: 960 } }
+      });
+      state.cameraStream = stream;
+      const video = document.getElementById('camera-preview');
+      video.srcObject = stream;
+      await video.play().catch(() => {});
+    } catch {
+      hasCameraSupport = false;
+      document.getElementById('camera-preview').classList.add('hidden');
+      document.getElementById('snap-btn').style.display = 'none';
+      document.getElementById('switch-btn').style.display = 'none';
+    }
+  }
+
+  function stopCamera() {
+    if (state.cameraStream) {
+      state.cameraStream.getTracks().forEach(t => t.stop());
+      state.cameraStream = null;
+    }
+  }
+
+  // ── Capture View ─────────────────────────────────────
+  function showCaptureView() {
+    state.capturedDataUrl = null;
+    document.getElementById('capture-view').classList.remove('hidden');
+    document.getElementById('app-header').style.display = 'none';
+    document.getElementById('timeline-view').classList.add('hidden');
+    document.getElementById('month-view').classList.add('hidden');
+    document.getElementById('note-input').value = '';
+    document.getElementById('save-btn').disabled = true;
+    setReviewMode(false);
+    startCamera();
+    history.pushState({ capture: true }, '');
+  }
+
+  function hideCaptureView() {
+    stopCamera();
+    document.getElementById('capture-view').classList.add('hidden');
+    document.getElementById('app-header').style.display = '';
+    switchView(state.view);
+  }
+
+  function setReviewMode(on) {
+    document.getElementById('camera-controls').style.display = on ? 'none' : 'flex';
+    document.getElementById('review-controls').style.display = on ? 'flex' : 'none';
+    document.getElementById('camera-preview').classList.toggle('hidden', on);
+    document.getElementById('captured-img').classList.toggle('hidden', !on);
+  }
+
+  function handleCapture(dataUrl) {
+    state.capturedDataUrl = dataUrl;
+    document.getElementById('captured-img').src = dataUrl;
+    setReviewMode(true);
+    stopCamera();
+    document.getElementById('save-btn').disabled = false;
+  }
+
+  function saveEntry() {
+    if (!state.capturedDataUrl) return;
+    const now = new Date();
+    const entry = {
+      id: String(Date.now()),
+      timestamp: now.toISOString(),
+      dateKey: now.toLocaleDateString('sv'),
+      photo: state.capturedDataUrl,
+      note: document.getElementById('note-input').value.trim(),
+    };
+    addEntry(entry);
+    state.currentDateKey = entry.dateKey;
+    state.currentMonthKey = entry.dateKey.slice(0, 7);
+    hideCaptureView();
+    showToast('✅ 記録しました');
+  }
+
+  // ── Event Wiring ─────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', () => {
+    state.entries = loadEntries();
+    renderTimeline();
+
+    // View toggle
+    document.getElementById('day-view-btn').addEventListener('click', () => switchView('day'));
+    document.getElementById('month-view-btn').addEventListener('click', () => {
+      state.currentMonthKey = state.currentDateKey.slice(0, 7);
+      switchView('month');
+    });
+
+    // Prev / Next
+    document.getElementById('prev-btn').addEventListener('click', () => {
+      state.editingId = null;
+      if (state.view === 'day') {
+        state.currentDateKey = shiftDate(state.currentDateKey, -1);
+        renderTimeline();
+      } else {
+        state.currentMonthKey = shiftMonth(state.currentMonthKey, -1);
+        renderMonthView();
+      }
+    });
+
+    document.getElementById('next-btn').addEventListener('click', () => {
+      state.editingId = null;
+      if (state.view === 'day') {
+        state.currentDateKey = shiftDate(state.currentDateKey, 1);
+        renderTimeline();
+      } else {
+        state.currentMonthKey = shiftMonth(state.currentMonthKey, 1);
+        renderMonthView();
+      }
+    });
+
+    // Date/month display tap → go to today/this month
+    document.getElementById('date-display').addEventListener('click', () => {
+      state.editingId = null;
+      if (state.view === 'day') {
+        state.currentDateKey = todayKey();
+        renderTimeline();
+      } else {
+        state.currentMonthKey = todayKey().slice(0, 7);
+        renderMonthView();
+      }
+    });
+
+    // Add button
+    document.getElementById('add-btn').addEventListener('click', showCaptureView);
+
+    // Snap
+    document.getElementById('snap-btn').addEventListener('click', () => {
+      compressImage(document.getElementById('camera-preview'), handleCapture);
+    });
+
+    // Upload
+    document.getElementById('upload-input').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => compressImage(img, handleCapture);
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    });
+
+    // Switch camera
+    document.getElementById('switch-btn').addEventListener('click', () => {
+      state.facingMode = state.facingMode === 'environment' ? 'user' : 'environment';
+      startCamera();
+    });
+
+    // Retake
+    document.getElementById('retake-btn').addEventListener('click', () => {
+      state.capturedDataUrl = null;
+      document.getElementById('save-btn').disabled = true;
+      setReviewMode(false);
+      startCamera();
+    });
+
+    // Cancel / Save
+    document.getElementById('cancel-btn').addEventListener('click', () => history.back());
+    document.getElementById('save-btn').addEventListener('click', saveEntry);
+
+    // Timeline actions (event delegation)
+    document.getElementById('timeline-container').addEventListener('click', (e) => {
+      const lb = e.target.closest('.js-open-lb');
+      if (lb) { openLightbox(lb.dataset.id); return; }
+
+      const del = e.target.closest('.delete-btn');
+      if (del) {
+        if (confirm('この記録を削除しますか？')) {
+          deleteEntry(del.dataset.id);
+          state.editingId = null;
+          renderTimeline();
+          showToast('削除しました');
+        }
+        return;
+      }
+
+      const edit = e.target.closest('.edit-btn');
+      if (edit) {
+        state.editingId = edit.dataset.id;
+        renderTimeline();
+        const ta = document.querySelector('.card-note-textarea');
+        if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+        return;
+      }
+
+      const saveNote = e.target.closest('.note-save-btn');
+      if (saveNote) {
+        const ta = document.querySelector(`.card-note-textarea[data-id="${saveNote.dataset.id}"]`);
+        updateEntryNote(saveNote.dataset.id, ta ? ta.value.trim() : '');
+        state.editingId = null;
+        renderTimeline();
+        showToast('✅ メモを更新しました');
+        return;
+      }
+
+      const cancelNote = e.target.closest('.note-cancel-btn');
+      if (cancelNote) {
+        state.editingId = null;
+        renderTimeline();
+        return;
+      }
+    });
+
+    // Month view actions (event delegation)
+    document.getElementById('month-container').addEventListener('click', (e) => {
+      const chip = e.target.closest('.js-open-lb');
+      if (chip) { openLightbox(chip.dataset.id); return; }
+
+      const gotoDay = e.target.closest('.js-goto-day');
+      if (gotoDay) {
+        state.currentDateKey = gotoDay.dataset.datekey;
+        switchView('day');
+        return;
+      }
+    });
+
+    // Lightbox close
+    document.getElementById('lightbox-close').addEventListener('click', closeLightbox);
+    document.getElementById('lightbox').addEventListener('click', (e) => {
+      if (e.target === document.getElementById('lightbox')) closeLightbox();
+    });
+
+    // Back button
+    window.addEventListener('popstate', () => {
+      if (!document.getElementById('lightbox').classList.contains('hidden')) {
+        closeLightbox(); return;
+      }
+      if (!document.getElementById('capture-view').classList.contains('hidden')) {
+        hideCaptureView(); return;
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
