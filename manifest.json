@@ -5,14 +5,14 @@
   "start_url": "./meal-log.html",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#FAFAF8",
+  "background_color": "#4BBFC6",
   "theme_color": "#D97B4F",
   "lang": "ja",
   "icons": [
     {
-      "src": "icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]
