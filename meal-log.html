@@ -270,32 +270,25 @@
       min-width: 0;
     }
 
-    /* 時刻 + 編集ボタン行 */
+    /* 時刻行（タップで時刻編集） */
     .card-time-row {
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      padding: 2px 0;
     }
     .card-time-full {
-      font-size: 16px;
+      font-size: 17px;
       font-weight: 800;
       color: var(--text);
       line-height: 1;
     }
-    .time-edit-btn {
-      border: none;
-      background: none;
-      font-size: 12px;
+    .time-edit-hint {
+      font-size: 11px;
       color: #CCCCCC;
-      cursor: pointer;
-      padding: 2px 3px;
-      border-radius: 4px;
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
-      line-height: 1;
     }
-    .time-edit-btn:active { color: var(--accent); }
-
     /* 時刻インライン編集 */
     .time-edit-row {
       display: flex;
@@ -975,9 +968,9 @@
                     <button class="time-cancel-btn" data-id="${e.id}">✕</button>
                   </div>
                 ` : `
-                  <div class="card-time-row">
+                  <div class="card-time-row js-time-edit" data-id="${e.id}">
                     <div class="card-time-full">${formatTime(e.timestamp)}</div>
-                    <button class="time-edit-btn" data-id="${e.id}" aria-label="時刻を編集">✏️</button>
+                    <span class="time-edit-hint">✎</span>
                   </div>
                 `}
                 ${state.editingId === e.id ? `
@@ -1313,8 +1306,8 @@
         return;
       }
 
-      // 時刻編集ボタン
-      const timeEdit = e.target.closest('.time-edit-btn');
+      // 時刻行タップで時刻編集
+      const timeEdit = e.target.closest('.js-time-edit');
       if (timeEdit) {
         state.editingTimeId = timeEdit.dataset.id;
         state.editingId = null;
