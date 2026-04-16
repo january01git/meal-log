@@ -254,8 +254,8 @@
     }
 
     .meal-photo {
-      width: 88px;
-      height: 88px;
+      width: 116px;
+      height: 116px;
       object-fit: cover;
       flex-shrink: 0;
       display: block;
@@ -270,12 +270,64 @@
       min-width: 0;
     }
 
+    /* 時刻 + 編集ボタン行 */
+    .card-time-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
     .card-time-full {
       font-size: 16px;
       font-weight: 800;
       color: var(--text);
       line-height: 1;
     }
+    .time-edit-btn {
+      border: none;
+      background: none;
+      font-size: 12px;
+      color: #CCCCCC;
+      cursor: pointer;
+      padding: 2px 3px;
+      border-radius: 4px;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      line-height: 1;
+    }
+    .time-edit-btn:active { color: var(--accent); }
+
+    /* 時刻インライン編集 */
+    .time-edit-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    .card-time-input {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      border: 1.5px solid var(--accent);
+      border-radius: 7px;
+      padding: 3px 7px;
+      font-family: inherit;
+      outline: none;
+      background: var(--bg);
+      -webkit-appearance: none;
+      width: 92px;
+    }
+    .time-save-btn, .time-cancel-btn {
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 4px 9px;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .time-save-btn   { background: var(--accent); color: #fff; }
+    .time-cancel-btn { background: var(--line);   color: var(--text-sub); }
 
     .card-note {
       font-size: 13px;
@@ -758,6 +810,7 @@
     facingMode: 'environment',
     capturedDataUrl: null,
     editingId: null,
+    editingTimeId: null,
   };
 
   // ── Helpers ───────────────────────────────────────────
@@ -835,6 +888,17 @@
     if (e) { e.note = note; saveEntries(state.entries); }
   }
 
+  function updateEntryTime(id, timeStr) {
+    // timeStr = "HH:MM"
+    const e = state.entries.find(e => e.id === id);
+    if (!e || !timeStr) return;
+    const d = new Date(e.timestamp);
+    const [h, m] = timeStr.split(':').map(Number);
+    d.setHours(h, m, 0, 0);
+    e.timestamp = d.toISOString();
+    saveEntries(state.entries);
+  }
+
   function getEntriesForDate(key) {
     return state.entries
       .filter(e => e.dateKey === key)
@@ -904,7 +968,18 @@
               <img class="meal-photo js-open-lb" src="${e.photo}" alt="食事の写真"
                    loading="lazy" data-id="${e.id}" style="cursor:pointer">
               <div class="card-body">
-                <div class="card-time-full">${formatTime(e.timestamp)}</div>
+                ${state.editingTimeId === e.id ? `
+                  <div class="time-edit-row">
+                    <input class="card-time-input" type="time" value="${formatTime(e.timestamp)}" data-id="${e.id}">
+                    <button class="time-save-btn" data-id="${e.id}">保存</button>
+                    <button class="time-cancel-btn" data-id="${e.id}">✕</button>
+                  </div>
+                ` : `
+                  <div class="card-time-row">
+                    <div class="card-time-full">${formatTime(e.timestamp)}</div>
+                    <button class="time-edit-btn" data-id="${e.id}" aria-label="時刻を編集">✏️</button>
+                  </div>
+                `}
                 ${state.editingId === e.id ? `
                   <textarea class="card-note-textarea" data-id="${e.id}">${escapeHtml(e.note || '')}</textarea>
                   <div class="note-edit-actions">
@@ -1004,7 +1079,7 @@
   // ── View Switching ───────────────────────────────────
   function switchView(view) {
     state.view = view;
-    state.editingId = null;
+    state.editingId = null; state.editingTimeId = null;
     const isDay = view === 'day';
     document.getElementById('timeline-view').classList.toggle('hidden', !isDay);
     document.getElementById('month-view').classList.toggle('hidden', isDay);
@@ -1123,7 +1198,7 @@
 
     // Prev / Next
     document.getElementById('prev-btn').addEventListener('click', () => {
-      state.editingId = null;
+      state.editingId = null; state.editingTimeId = null;
       if (state.view === 'day') {
         state.currentDateKey = shiftDate(state.currentDateKey, -1);
         renderTimeline();
@@ -1134,7 +1209,7 @@
     });
 
     document.getElementById('next-btn').addEventListener('click', () => {
-      state.editingId = null;
+      state.editingId = null; state.editingTimeId = null;
       if (state.view === 'day') {
         state.currentDateKey = shiftDate(state.currentDateKey, 1);
         renderTimeline();
@@ -1146,7 +1221,7 @@
 
     // Date/month display tap → go to today/this month
     document.getElementById('date-display').addEventListener('click', () => {
-      state.editingId = null;
+      state.editingId = null; state.editingTimeId = null;
       if (state.view === 'day') {
         state.currentDateKey = todayKey();
         renderTimeline();
@@ -1205,7 +1280,7 @@
       if (del) {
         if (confirm('この記録を削除しますか？')) {
           deleteEntry(del.dataset.id);
-          state.editingId = null;
+          state.editingId = null; state.editingTimeId = null;
           renderTimeline();
           showToast('削除しました');
         }
@@ -1225,7 +1300,7 @@
       if (saveNote) {
         const ta = document.querySelector(`.card-note-textarea[data-id="${saveNote.dataset.id}"]`);
         updateEntryNote(saveNote.dataset.id, ta ? ta.value.trim() : '');
-        state.editingId = null;
+        state.editingId = null; state.editingTimeId = null;
         renderTimeline();
         showToast('✅ メモを更新しました');
         return;
@@ -1233,7 +1308,37 @@
 
       const cancelNote = e.target.closest('.note-cancel-btn');
       if (cancelNote) {
+        state.editingId = null; state.editingTimeId = null;
+        renderTimeline();
+        return;
+      }
+
+      // 時刻編集ボタン
+      const timeEdit = e.target.closest('.time-edit-btn');
+      if (timeEdit) {
+        state.editingTimeId = timeEdit.dataset.id;
         state.editingId = null;
+        renderTimeline();
+        const inp = document.querySelector('.card-time-input');
+        if (inp) inp.focus();
+        return;
+      }
+
+      // 時刻保存
+      const timeSave = e.target.closest('.time-save-btn');
+      if (timeSave) {
+        const inp = document.querySelector(`.card-time-input[data-id="${timeSave.dataset.id}"]`);
+        if (inp && inp.value) updateEntryTime(timeSave.dataset.id, inp.value);
+        state.editingTimeId = null;
+        renderTimeline();
+        showToast('✅ 時刻を更新しました');
+        return;
+      }
+
+      // 時刻キャンセル
+      const timeCancel = e.target.closest('.time-cancel-btn');
+      if (timeCancel) {
+        state.editingTimeId = null;
         renderTimeline();
         return;
       }
