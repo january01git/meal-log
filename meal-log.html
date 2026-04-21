@@ -809,6 +809,114 @@
     }
     #toast.show { transform: translateX(-50%) translateY(0); }
 
+    /* ── Week View ── */
+    #week-view {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: calc(24px + var(--safe-bottom));
+    }
+    #week-view.hidden { display: none; }
+
+    /* 7日ストリップ */
+    .week-day-strip {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+      padding: 10px 6px 8px;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    .week-day-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .week-dow {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-sub);
+    }
+    .week-dow.sun { color: #E53E3E; }
+    .week-dow.sat { color: #4A90E2; }
+    .week-date-num {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--text);
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      line-height: 1;
+    }
+    .week-date-num.today {
+      background: var(--accent);
+      color: #fff;
+    }
+    .week-day-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: transparent;
+    }
+    .week-day-dot.has-photo { background: var(--accent); }
+
+    /* 2カラム大型フォトグリッド */
+    .week-photo-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 3px;
+      padding: 3px;
+    }
+    .week-photo-cell {
+      position: relative;
+      aspect-ratio: 1;
+      overflow: hidden;
+      border-radius: 6px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      transition: opacity 0.1s;
+    }
+    .week-photo-cell:active { opacity: 0.82; }
+    .week-photo-cell img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .week-photo-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 28px 9px 9px;
+      background: linear-gradient(transparent, rgba(0,0,0,0.52));
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .week-photo-day {
+      font-size: 13px;
+      font-weight: 800;
+      color: #fff;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    }
+    .week-photo-time {
+      font-size: 12px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.92);
+      text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    }
+
     /* ── Settings Button ── */
     #settings-btn {
       width: 34px;
@@ -912,6 +1020,7 @@
     </div>
     <div class="view-toggle">
       <button class="view-toggle-btn active" id="day-view-btn">日</button>
+      <button class="view-toggle-btn" id="week-view-btn">週</button>
       <button class="view-toggle-btn" id="month-view-btn">月</button>
     </div>
     <button id="settings-btn" aria-label="設定">⚙️</button>
@@ -922,6 +1031,11 @@
   <main id="timeline-view">
     <div id="timeline-container"></div>
   </main>
+
+  <!-- Week View -->
+  <section id="week-view" class="hidden">
+    <div id="week-container"></div>
+  </section>
 
   <!-- Month View -->
   <section id="month-view" class="hidden">
@@ -995,8 +1109,9 @@
 
   // ── State ─────────────────────────────────────────────
   const state = {
-    view: 'day',                                    // 'day' | 'month'
+    view: 'day',                                    // 'day' | 'week' | 'month'
     currentDateKey: todayKey(),                     // YYYY-MM-DD
+    currentWeekStart: getWeekStart(todayKey()),     // YYYY-MM-DD (日曜)
     currentMonthKey: todayKey().slice(0, 7),        // YYYY-MM
     entries: [],
     cameraStream: null,
@@ -1015,6 +1130,38 @@
     const d = dateKeyToDate(key);
     d.setDate(d.getDate() + days);
     return d.toLocaleDateString('sv');
+  }
+
+  function getWeekStart(dateKey) {
+    const d = dateKeyToDate(dateKey);
+    d.setDate(d.getDate() - d.getDay()); // 日曜に戻す
+    return d.toLocaleDateString('sv');
+  }
+
+  function shiftWeek(weekStart, delta) {
+    return shiftDate(weekStart, delta * 7);
+  }
+
+  function formatWeekRange(weekStart) {
+    const s = dateKeyToDate(weekStart);
+    const e = new Date(s);
+    e.setDate(e.getDate() + 6);
+    const sm = s.getMonth() + 1, sd = s.getDate();
+    const em = e.getMonth() + 1, ed = e.getDate();
+    return sm === em
+      ? `${sm}月${sd}日〜${ed}日`
+      : `${sm}月${sd}日〜${em}月${ed}日`;
+  }
+
+  function isThisWeek(weekStart) {
+    return weekStart === getWeekStart(todayKey());
+  }
+
+  function getEntriesForWeek(weekStart) {
+    const weekEnd = shiftDate(weekStart, 6);
+    return state.entries
+      .filter(e => e.dateKey >= weekStart && e.dateKey <= weekEnd)
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   }
 
   function shiftMonth(monthKey, delta) {
@@ -1123,13 +1270,25 @@
 
   // ── Header Render ────────────────────────────────────
   function renderHeader() {
-    const isDay = state.view === 'day';
-    document.getElementById('date-main-text').textContent = isDay
-      ? formatDisplayDate(state.currentDateKey)
-      : formatDisplayMonth(state.currentMonthKey);
-    document.getElementById('date-sub-text').textContent = isDay && state.currentDateKey === todayKey() ? '今日' : '';
+    const isDay   = state.view === 'day';
+    const isWeek  = state.view === 'week';
+    const isMonth = state.view === 'month';
+    let mainText = '', subText = '';
+    if (isDay) {
+      mainText = formatDisplayDate(state.currentDateKey);
+      subText  = state.currentDateKey === todayKey() ? '今日' : '';
+    } else if (isWeek) {
+      mainText = formatWeekRange(state.currentWeekStart);
+      subText  = isThisWeek(state.currentWeekStart) ? '今週' : '';
+    } else {
+      mainText = formatDisplayMonth(state.currentMonthKey);
+      subText  = '';
+    }
+    document.getElementById('date-main-text').textContent = mainText;
+    document.getElementById('date-sub-text').textContent  = subText;
     document.getElementById('day-view-btn').classList.toggle('active', isDay);
-    document.getElementById('month-view-btn').classList.toggle('active', !isDay);
+    document.getElementById('week-view-btn').classList.toggle('active', isWeek);
+    document.getElementById('month-view-btn').classList.toggle('active', isMonth);
     document.getElementById('add-btn').style.display = isDay ? '' : 'none';
   }
 
@@ -1193,6 +1352,61 @@
           </div>
         `).join('')}
       </div>`;
+  }
+
+  // ── Week View Render ─────────────────────────────────
+  function renderWeekView() {
+    renderHeader();
+    const weekStart = state.currentWeekStart;
+    const entries   = getEntriesForWeek(weekStart);
+    const container = document.getElementById('week-container');
+    const today     = todayKey();
+    const dows      = ['日','月','火','水','木','金','土'];
+
+    // 7日ストリップ
+    const stripCells = dows.map((dow, i) => {
+      const dk = shiftDate(weekStart, i);
+      const d  = dateKeyToDate(dk);
+      const hasPhoto = state.entries.some(e => e.dateKey === dk);
+      const isToday  = dk === today;
+      const isSun = i === 0, isSat = i === 6;
+      return `
+        <div class="week-day-cell js-goto-day" data-datekey="${dk}">
+          <div class="week-dow${isSun ? ' sun' : isSat ? ' sat' : ''}">${dow}</div>
+          <div class="week-date-num${isToday ? ' today' : ''}">${d.getDate()}</div>
+          <div class="week-day-dot${hasPhoto ? ' has-photo' : ''}"></div>
+        </div>`;
+    }).join('');
+
+    // フォトグリッド
+    let gridHtml;
+    if (entries.length === 0) {
+      gridHtml = `
+        <div class="empty-state">
+          <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
+            <circle cx="32" cy="32" r="30" stroke="#888" stroke-width="2"/>
+            <path d="M20 26 Q20 18 28 18 Q32 18 32 22 Q32 18 36 18 Q44 18 44 26 Q44 34 32 42 Q20 34 20 26Z" stroke="#888" stroke-width="2" fill="none"/>
+          </svg>
+          <p>この週の食事記録はありません<br>＋ボタンで追加しましょう</p>
+        </div>`;
+    } else {
+      const cells = entries.map(e => {
+        const d   = dateKeyToDate(e.dateKey);
+        const dow = dows[d.getDay()];
+        return `
+          <div class="week-photo-cell js-open-lb" data-id="${e.id}">
+            <img src="${e.photo}" alt="" loading="lazy">
+            <div class="week-photo-overlay">
+              <span class="week-photo-day">${dow}${d.getDate()}</span>
+              <span class="week-photo-time">${formatTime(e.timestamp)}</span>
+            </div>
+          </div>`;
+      }).join('');
+      gridHtml = `<div class="week-photo-grid">${cells}</div>`;
+    }
+
+    container.innerHTML =
+      `<div class="week-day-strip">${stripCells}</div>${gridHtml}`;
   }
 
   // ── Month View Render ────────────────────────────────
@@ -1282,11 +1496,15 @@
   function switchView(view) {
     state.view = view;
     state.editingId = null; state.editingTimeId = null;
-    const isDay = view === 'day';
+    const isDay   = view === 'day';
+    const isWeek  = view === 'week';
+    const isMonth = view === 'month';
     document.getElementById('timeline-view').classList.toggle('hidden', !isDay);
-    document.getElementById('month-view').classList.toggle('hidden', isDay);
-    if (isDay) renderTimeline();
-    else renderMonthView();
+    document.getElementById('week-view').classList.toggle('hidden',     !isWeek);
+    document.getElementById('month-view').classList.toggle('hidden',    !isMonth);
+    if (isDay)   renderTimeline();
+    else if (isWeek) renderWeekView();
+    else         renderMonthView();
   }
 
   // ── Lightbox ─────────────────────────────────────────
@@ -1339,6 +1557,7 @@
     document.getElementById('capture-view').classList.remove('hidden');
     document.getElementById('app-header').style.display = 'none';
     document.getElementById('timeline-view').classList.add('hidden');
+    document.getElementById('week-view').classList.add('hidden');
     document.getElementById('month-view').classList.add('hidden');
     document.getElementById('note-input').value = '';
     document.getElementById('save-btn').disabled = true;
@@ -1450,6 +1669,10 @@
 
     // View toggle
     document.getElementById('day-view-btn').addEventListener('click', () => switchView('day'));
+    document.getElementById('week-view-btn').addEventListener('click', () => {
+      state.currentWeekStart = getWeekStart(state.currentDateKey);
+      switchView('week');
+    });
     document.getElementById('month-view-btn').addEventListener('click', () => {
       state.currentMonthKey = state.currentDateKey.slice(0, 7);
       switchView('month');
@@ -1461,6 +1684,9 @@
       if (state.view === 'day') {
         state.currentDateKey = shiftDate(state.currentDateKey, -1);
         renderTimeline();
+      } else if (state.view === 'week') {
+        state.currentWeekStart = shiftWeek(state.currentWeekStart, -1);
+        renderWeekView();
       } else {
         state.currentMonthKey = shiftMonth(state.currentMonthKey, -1);
         renderMonthView();
@@ -1472,18 +1698,24 @@
       if (state.view === 'day') {
         state.currentDateKey = shiftDate(state.currentDateKey, 1);
         renderTimeline();
+      } else if (state.view === 'week') {
+        state.currentWeekStart = shiftWeek(state.currentWeekStart, 1);
+        renderWeekView();
       } else {
         state.currentMonthKey = shiftMonth(state.currentMonthKey, 1);
         renderMonthView();
       }
     });
 
-    // Date/month display tap → go to today/this month
+    // Date/month/week display tap → go to today
     document.getElementById('date-display').addEventListener('click', () => {
       state.editingId = null; state.editingTimeId = null;
       if (state.view === 'day') {
         state.currentDateKey = todayKey();
         renderTimeline();
+      } else if (state.view === 'week') {
+        state.currentWeekStart = getWeekStart(todayKey());
+        renderWeekView();
       } else {
         state.currentMonthKey = todayKey().slice(0, 7);
         renderMonthView();
@@ -1610,6 +1842,19 @@
       if (timeCancel) {
         state.editingTimeId = null;
         renderTimeline();
+        return;
+      }
+    });
+
+    // Week view actions (event delegation)
+    document.getElementById('week-container').addEventListener('click', (e) => {
+      const lb = e.target.closest('.js-open-lb');
+      if (lb) { openLightbox(lb.dataset.id); return; }
+
+      const gotoDay = e.target.closest('.js-goto-day');
+      if (gotoDay) {
+        state.currentDateKey = gotoDay.dataset.datekey;
+        switchView('day');
         return;
       }
     });
