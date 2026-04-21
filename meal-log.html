@@ -719,6 +719,94 @@
       white-space: nowrap;
     }
     #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ── Settings Button ── */
+    #settings-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: none;
+      background: var(--bg);
+      color: var(--text-sub);
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.12s;
+      flex-shrink: 0;
+    }
+    #settings-btn:active { background: var(--line); }
+
+    /* ── Settings Overlay ── */
+    #settings-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 400;
+      background: rgba(0,0,0,0.45);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    #settings-overlay.hidden { display: none; }
+
+    #settings-sheet {
+      background: var(--surface);
+      border-radius: 20px 20px 0 0;
+      width: 100%;
+      max-width: 430px;
+      padding: 20px 20px calc(20px + var(--safe-bottom));
+    }
+    .settings-handle {
+      width: 40px;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--line);
+      margin: 0 auto 20px;
+    }
+    .settings-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    .settings-desc {
+      font-size: 12px;
+      color: var(--text-sub);
+      line-height: 1.6;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    .settings-btn-row {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .settings-action-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      padding: 14px 20px;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      transition: opacity 0.12s, transform 0.1s;
+      width: 100%;
+    }
+    .settings-action-btn:active { opacity: 0.8; transform: scale(0.97); }
+    .settings-export-btn { background: var(--accent); color: #fff; }
+    .settings-import-btn { background: var(--bg); color: var(--text); border: 1.5px solid var(--line); }
+    .settings-close-btn  { background: none; color: var(--text-sub); font-size: 13px; margin-top: 4px; }
+    #import-json-input { display: none; }
   </style>
 </head>
 <body>
@@ -737,6 +825,7 @@
       <button class="view-toggle-btn active" id="day-view-btn">日</button>
       <button class="view-toggle-btn" id="month-view-btn">月</button>
     </div>
+    <button id="settings-btn" aria-label="設定">⚙️</button>
     <button id="add-btn" aria-label="食事を追加">+</button>
   </header>
 
@@ -784,6 +873,28 @@
   <div id="lightbox-info">
     <div id="lightbox-datetime"></div>
     <div id="lightbox-note" class="lb-note"></div>
+  </div>
+</div>
+
+<!-- Settings Overlay -->
+<div id="settings-overlay" class="hidden">
+  <div id="settings-sheet">
+    <div class="settings-handle"></div>
+    <div class="settings-title">データのバックアップ・復元</div>
+    <div class="settings-desc">
+      機種変更や引き継ぎ時は、バックアップを保存して<br>
+      新しいiPhoneで「復元」してください。
+    </div>
+    <div class="settings-btn-row">
+      <button class="settings-action-btn settings-export-btn" id="export-btn">
+        📥 バックアップを保存（JSONファイル）
+      </button>
+      <label class="settings-action-btn settings-import-btn" id="import-label">
+        📤 バックアップから復元
+        <input type="file" id="import-json-input" accept=".json,application/json">
+      </label>
+      <button class="settings-action-btn settings-close-btn" id="settings-close-btn">閉じる</button>
+    </div>
   </div>
 </div>
 
@@ -1177,6 +1288,63 @@
     showToast('✅ 記録しました');
   }
 
+  // ── Backup / Restore ─────────────────────────────────
+  function exportData() {
+    const data = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      entries: state.entries,
+    };
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const today = new Date().toLocaleDateString('sv');
+    a.href = url;
+    a.download = `食事記録バックアップ_${today}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('✅ バックアップを保存しました');
+    closeSettings();
+  }
+
+  function importData(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        const imported = Array.isArray(data) ? data : (data.entries || []);
+        if (!imported.length) { showToast('⚠️ データが見つかりませんでした'); return; }
+        if (!confirm(`${imported.length}件の記録を復元します。\n現在のデータに追加されます。よろしいですか？`)) return;
+        // Merge: avoid duplicates by id
+        const existingIds = new Set(state.entries.map(e => e.id));
+        const newEntries = imported.filter(e => e.id && !existingIds.has(e.id));
+        state.entries = [...state.entries, ...newEntries]
+          .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+        saveEntries(state.entries);
+        showToast(`✅ ${newEntries.length}件を復元しました`);
+        closeSettings();
+        if (state.view === 'day') renderTimeline();
+        else renderMonthView();
+      } catch {
+        showToast('⚠️ ファイルの読み込みに失敗しました');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function openSettings() {
+    document.getElementById('settings-overlay').classList.remove('hidden');
+  }
+
+  function closeSettings() {
+    document.getElementById('settings-overlay').classList.add('hidden');
+    document.getElementById('import-json-input').value = '';
+  }
+
   // ── Event Wiring ─────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
     state.entries = loadEntries();
@@ -1222,6 +1390,17 @@
         state.currentMonthKey = todayKey().slice(0, 7);
         renderMonthView();
       }
+    });
+
+    // Settings
+    document.getElementById('settings-btn').addEventListener('click', openSettings);
+    document.getElementById('settings-close-btn').addEventListener('click', closeSettings);
+    document.getElementById('settings-overlay').addEventListener('click', (e) => {
+      if (e.target === document.getElementById('settings-overlay')) closeSettings();
+    });
+    document.getElementById('export-btn').addEventListener('click', exportData);
+    document.getElementById('import-json-input').addEventListener('change', (e) => {
+      importData(e.target.files[0]);
     });
 
     // Add button
