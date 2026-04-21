@@ -486,7 +486,7 @@
     .month-cal-dow-row {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      padding: 10px 10px 5px;
+      padding: 8px 0 4px;
       background: var(--bg);
       position: sticky;
       top: 0;
@@ -505,12 +505,12 @@
     .month-cal-grid {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      gap: 3px;
-      padding: 0 10px calc(24px + var(--safe-bottom));
+      gap: 1px;
+      padding: 0 0 calc(24px + var(--safe-bottom));
     }
     .month-cal-day {
-      aspect-ratio: 1;
-      border-radius: 7px;
+      aspect-ratio: 3/4;
+      border-radius: 4px;
       overflow: hidden;
       position: relative;
       background: var(--surface);
@@ -809,112 +809,146 @@
     }
     #toast.show { transform: translateX(-50%) translateY(0); }
 
+    /* ── Photo Collage (shared) ── */
+    /* 縦積み：週ビューの細い列用 */
+    .collage-v {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      gap: 1px;
+      overflow: hidden;
+      background: var(--line);
+    }
+    .collage-v .clg-cell { flex: 1; }
+    /* 2×2グリッド：月ビューの正方形セル用 */
+    .collage-sq {
+      display: grid;
+      width: 100%;
+      height: 100%;
+      gap: 1px;
+      overflow: hidden;
+      background: var(--line);
+    }
+    .collage-sq.n1 { grid-template-columns: 1fr; }
+    .collage-sq.n2 { grid-template-columns: 1fr 1fr; }
+    .collage-sq.n3 {
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+    }
+    .collage-sq.n3 .clg-cell:first-child { grid-row: 1 / 3; }
+    .collage-sq.n4p {
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+    }
+    .clg-cell {
+      position: relative;
+      overflow: hidden;
+      min-width: 0;
+      min-height: 0;
+    }
+    .clg-cell img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .clg-more {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.48);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
     /* ── Week View ── */
     #week-view {
       flex: 1;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
-      padding-bottom: calc(24px + var(--safe-bottom));
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
     #week-view.hidden { display: none; }
 
-    /* 7日ストリップ */
-    .week-day-strip {
+    #week-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    /* 7列縦ストリップグリッド */
+    .week-cols-grid {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      background: var(--surface);
-      border-bottom: 1px solid var(--line);
-      padding: 10px 6px 8px;
-      position: sticky;
-      top: 0;
-      z-index: 5;
+      gap: 2px;
+      padding: 2px;
+      flex: 1;
+      min-height: 0;
     }
-    .week-day-cell {
+    .week-col-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      min-height: 0;
+      transition: opacity 0.1s;
+    }
+    .week-col-wrap:active { opacity: 0.75; }
+    .week-col-hd {
+      flex-shrink: 0;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 3px;
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-      touch-action: manipulation;
+      gap: 2px;
+      padding: 5px 0 4px;
+      background: var(--surface);
+      border-radius: 5px 5px 0 0;
     }
-    .week-dow {
-      font-size: 10px;
+    .week-col-dow {
+      font-size: 9px;
       font-weight: 700;
       color: var(--text-sub);
     }
-    .week-dow.sun { color: #E53E3E; }
-    .week-dow.sat { color: #4A90E2; }
-    .week-date-num {
-      font-size: 15px;
+    .week-col-dow.sun { color: #E53E3E; }
+    .week-col-dow.sat { color: #4A90E2; }
+    .week-col-dn {
+      font-size: 13px;
       font-weight: 800;
       color: var(--text);
-      width: 30px;
-      height: 30px;
+      width: 24px;
+      height: 24px;
       display: flex;
       align-items: center;
       justify-content: center;
       border-radius: 50%;
       line-height: 1;
     }
-    .week-date-num.today {
-      background: var(--accent);
-      color: #fff;
-    }
-    .week-day-dot {
-      width: 5px;
-      height: 5px;
+    .week-col-dn.today { background: var(--accent); color: #fff; }
+    .week-col-dot {
+      width: 4px;
+      height: 4px;
       border-radius: 50%;
       background: transparent;
     }
-    .week-day-dot.has-photo { background: var(--accent); }
-
-    /* 2カラム大型フォトグリッド */
-    .week-photo-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 3px;
-      padding: 3px;
-    }
-    .week-photo-cell {
-      position: relative;
-      aspect-ratio: 1;
+    .week-col-dot.has-photo { background: var(--accent); }
+    .week-col-body {
+      flex: 1;
+      border-radius: 0 0 5px 5px;
       overflow: hidden;
-      border-radius: 6px;
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-      touch-action: manipulation;
-      transition: opacity 0.1s;
+      min-height: 0;
+      position: relative;
     }
-    .week-photo-cell:active { opacity: 0.82; }
-    .week-photo-cell img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
-    .week-photo-overlay {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      padding: 28px 9px 9px;
-      background: linear-gradient(transparent, rgba(0,0,0,0.52));
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-    }
-    .week-photo-day {
-      font-size: 13px;
-      font-weight: 800;
-      color: #fff;
-      text-shadow: 0 1px 4px rgba(0,0,0,0.6);
-    }
-    .week-photo-time {
-      font-size: 12px;
-      font-weight: 600;
-      color: rgba(255,255,255,0.92);
-      text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    .week-col-body.empty-col {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-top: none;
     }
 
     /* ── Settings Button ── */
@@ -1157,6 +1191,28 @@
     return weekStart === getWeekStart(todayKey());
   }
 
+  function buildCollageHTML(entries, mode) {
+    // mode: 'v' = 縦積み(週用), 'sq' = 2×2グリッド(月用)
+    if (!entries || entries.length === 0) return '';
+    if (mode === 'v') {
+      const show = entries.slice(0, 5);
+      const extra = entries.length - show.length;
+      return `<div class="collage-v">${show.map((e, i) => {
+        const isLast = extra > 0 && i === show.length - 1;
+        return `<div class="clg-cell"><img src="${e.photo}" alt="" loading="lazy">${isLast ? `<div class="clg-more">+${extra}</div>` : ''}</div>`;
+      }).join('')}</div>`;
+    } else {
+      const n = entries.length;
+      const show = entries.slice(0, 4);
+      const extra = n - show.length;
+      const cls = n === 1 ? 'n1' : n === 2 ? 'n2' : n === 3 ? 'n3' : 'n4p';
+      return `<div class="collage-sq ${cls}">${show.map((e, i) => {
+        const isLast = extra > 0 && i === show.length - 1;
+        return `<div class="clg-cell"><img src="${e.photo}" alt="" loading="lazy">${isLast ? `<div class="clg-more">+${extra}</div>` : ''}</div>`;
+      }).join('')}</div>`;
+    }
+  }
+
   function getEntriesForWeek(weekStart) {
     const weekEnd = shiftDate(weekStart, 6);
     return state.entries
@@ -1358,55 +1414,32 @@
   function renderWeekView() {
     renderHeader();
     const weekStart = state.currentWeekStart;
-    const entries   = getEntriesForWeek(weekStart);
-    const container = document.getElementById('week-container');
     const today     = todayKey();
     const dows      = ['日','月','火','水','木','金','土'];
+    const container = document.getElementById('week-container');
 
-    // 7日ストリップ
-    const stripCells = dows.map((dow, i) => {
+    const cols = dows.map((dow, i) => {
       const dk = shiftDate(weekStart, i);
       const d  = dateKeyToDate(dk);
-      const hasPhoto = state.entries.some(e => e.dateKey === dk);
-      const isToday  = dk === today;
+      const dayEntries = state.entries
+        .filter(e => e.dateKey === dk)
+        .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+      const isToday = dk === today;
       const isSun = i === 0, isSat = i === 6;
       return `
-        <div class="week-day-cell js-goto-day" data-datekey="${dk}">
-          <div class="week-dow${isSun ? ' sun' : isSat ? ' sat' : ''}">${dow}</div>
-          <div class="week-date-num${isToday ? ' today' : ''}">${d.getDate()}</div>
-          <div class="week-day-dot${hasPhoto ? ' has-photo' : ''}"></div>
+        <div class="week-col-wrap js-goto-day" data-datekey="${dk}">
+          <div class="week-col-hd">
+            <span class="week-col-dow${isSun ? ' sun' : isSat ? ' sat' : ''}">${dow}</span>
+            <span class="week-col-dn${isToday ? ' today' : ''}">${d.getDate()}</span>
+            <div class="week-col-dot${dayEntries.length > 0 ? ' has-photo' : ''}"></div>
+          </div>
+          <div class="week-col-body${dayEntries.length === 0 ? ' empty-col' : ''}">
+            ${buildCollageHTML(dayEntries, 'v')}
+          </div>
         </div>`;
     }).join('');
 
-    // フォトグリッド
-    let gridHtml;
-    if (entries.length === 0) {
-      gridHtml = `
-        <div class="empty-state">
-          <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
-            <circle cx="32" cy="32" r="30" stroke="#888" stroke-width="2"/>
-            <path d="M20 26 Q20 18 28 18 Q32 18 32 22 Q32 18 36 18 Q44 18 44 26 Q44 34 32 42 Q20 34 20 26Z" stroke="#888" stroke-width="2" fill="none"/>
-          </svg>
-          <p>この週の食事記録はありません<br>＋ボタンで追加しましょう</p>
-        </div>`;
-    } else {
-      const cells = entries.map(e => {
-        const d   = dateKeyToDate(e.dateKey);
-        const dow = dows[d.getDay()];
-        return `
-          <div class="week-photo-cell js-open-lb" data-id="${e.id}">
-            <img src="${e.photo}" alt="" loading="lazy">
-            <div class="week-photo-overlay">
-              <span class="week-photo-day">${dow}${d.getDate()}</span>
-              <span class="week-photo-time">${formatTime(e.timestamp)}</span>
-            </div>
-          </div>`;
-      }).join('');
-      gridHtml = `<div class="week-photo-grid">${cells}</div>`;
-    }
-
-    container.innerHTML =
-      `<div class="week-day-strip">${stripCells}</div>${gridHtml}`;
+    container.innerHTML = `<div class="week-cols-grid">${cols}</div>`;
   }
 
   // ── Month View Render ────────────────────────────────
@@ -1471,11 +1504,9 @@
       const todayCls = isToday ? ' today-day' : '';
 
       if (dayEntries.length > 0) {
-        const first = dayEntries[0];
         cells += `
           <div class="month-cal-day has-photo${todayCls} js-goto-day" data-datekey="${dk}">
-            <img src="${first.photo}" alt="" loading="lazy">
-            ${dayEntries.length > 1 ? `<div class="month-cal-count">${dayEntries.length}</div>` : ''}
+            ${buildCollageHTML(dayEntries, 'sq')}
             <div class="month-cal-day-num">${d}</div>
           </div>`;
       } else {
