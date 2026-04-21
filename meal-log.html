@@ -482,6 +482,95 @@
       color: var(--text-sub);
     }
 
+    /* ── Month Calendar Grid ── */
+    .month-cal-dow-row {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      padding: 10px 10px 5px;
+      background: var(--bg);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    .month-cal-dow {
+      text-align: center;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-sub);
+      padding: 3px 0;
+    }
+    .month-cal-dow:first-child { color: #E53E3E; }
+    .month-cal-dow:last-child  { color: #4A90E2; }
+
+    .month-cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 3px;
+      padding: 0 10px calc(24px + var(--safe-bottom));
+    }
+    .month-cal-day {
+      aspect-ratio: 1;
+      border-radius: 7px;
+      overflow: hidden;
+      position: relative;
+      background: var(--surface);
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      transition: transform 0.1s;
+    }
+    .month-cal-day:active { transform: scale(0.93); }
+    .month-cal-day.out-of-month {
+      visibility: hidden;
+      pointer-events: none;
+    }
+    .month-cal-day img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .month-cal-day-num {
+      position: absolute;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .month-cal-day.has-photo .month-cal-day-num {
+      bottom: 3px;
+      right: 4px;
+      font-size: 9px;
+      color: rgba(255,255,255,0.95);
+      text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+    }
+    .month-cal-day.no-photo .month-cal-day-num {
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 13px;
+      color: var(--text-sub);
+    }
+    .month-cal-day.today-day {
+      box-shadow: 0 0 0 2px var(--accent);
+    }
+    .month-cal-day.today-day.no-photo .month-cal-day-num {
+      color: var(--accent);
+    }
+    .month-cal-count {
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 8px;
+      font-weight: 800;
+      border-radius: 50px;
+      padding: 1px 4px;
+      line-height: 1.4;
+      min-width: 15px;
+      text-align: center;
+    }
+
     /* Summary bar in month view */
     .month-summary-bar {
       background: var(--surface);
@@ -1113,17 +1202,11 @@
     const entries = getEntriesForMonth(monthKey);
     const container = document.getElementById('month-container');
 
-    if (entries.length === 0) {
-      container.innerHTML = `
-        <div class="month-empty">
-          <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
-            <circle cx="32" cy="32" r="30" stroke="#888" stroke-width="2"/>
-            <path d="M20 26 Q20 18 28 18 Q32 18 32 22 Q32 18 36 18 Q44 18 44 26 Q44 34 32 42 Q20 34 20 26Z" stroke="#888" stroke-width="2" fill="none"/>
-          </svg>
-          <p>この月の食事記録はありません</p>
-        </div>`;
-      return;
-    }
+    const [y, m] = monthKey.split('-').map(Number);
+    const firstDay = new Date(y, m - 1, 1);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const startDow = firstDay.getDay(); // 0=日, 1=月, ...
+    const today = todayKey();
 
     // Group by dateKey
     const byDay = {};
@@ -1131,12 +1214,11 @@
       if (!byDay[e.dateKey]) byDay[e.dateKey] = [];
       byDay[e.dateKey].push(e);
     }
-    const days = Object.keys(byDay).sort();
-    const today = todayKey();
+    const activeDays = Object.keys(byDay).length;
     const totalPhotos = entries.length;
-    const activeDays = days.length;
 
-    container.innerHTML = `
+    // Summary bar (only when there's data)
+    const summaryHtml = totalPhotos > 0 ? `
       <div class="month-summary-bar">
         <div class="month-stat">
           <div class="month-stat-value">${activeDays}</div>
@@ -1152,32 +1234,48 @@
           <div class="month-stat-value">${Math.round(totalPhotos / activeDays * 10) / 10}</div>
           <div class="month-stat-label">1日平均</div>
         </div>
-      </div>
-      ${days.map((dk, i) => {
-        const dayEntries = byDay[dk];
-        const d = dateKeyToDate(dk);
-        const ww = ['日','月','火','水','木','金','土'];
-        const label = `${d.getMonth()+1}月${d.getDate()}日（${ww[d.getDay()]}）`;
-        const isToday = dk === today;
-        return `
-          <div class="month-day-section" style="animation-delay:${i*30}ms">
-            <div class="month-day-header js-goto-day" data-datekey="${dk}">
-              <div class="month-day-label${isToday ? ' today' : ''}">${label}</div>
-              <div style="display:flex;align-items:center;gap:6px">
-                <div class="month-day-count">${dayEntries.length}食</div>
-                <div class="month-day-arrow">›</div>
-              </div>
-            </div>
-            <div class="month-photo-row">
-              ${dayEntries.map(e => `
-                <div class="month-photo-chip js-open-lb" data-id="${e.id}">
-                  <img src="${e.photo}" alt="" loading="lazy">
-                  <div class="month-chip-time">${formatTime(e.timestamp)}</div>
-                </div>
-              `).join('')}
-            </div>
+      </div>` : '';
+
+    // Day-of-week header (日〜土)
+    const dows = ['日','月','火','水','木','金','土'];
+    const dowHtml = `
+      <div class="month-cal-dow-row">
+        ${dows.map(d => `<div class="month-cal-dow">${d}</div>`).join('')}
+      </div>`;
+
+    // Calendar cells
+    let cells = '';
+    // Leading empty slots
+    for (let i = 0; i < startDow; i++) {
+      cells += `<div class="month-cal-day out-of-month"></div>`;
+    }
+    // Days of month
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dk = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const dayEntries = byDay[dk] || [];
+      const isToday = dk === today;
+      const todayCls = isToday ? ' today-day' : '';
+
+      if (dayEntries.length > 0) {
+        const first = dayEntries[0];
+        cells += `
+          <div class="month-cal-day has-photo${todayCls} js-goto-day" data-datekey="${dk}">
+            <img src="${first.photo}" alt="" loading="lazy">
+            ${dayEntries.length > 1 ? `<div class="month-cal-count">${dayEntries.length}</div>` : ''}
+            <div class="month-cal-day-num">${d}</div>
           </div>`;
-      }).join('')}`;
+      } else {
+        cells += `
+          <div class="month-cal-day no-photo${todayCls} js-goto-day" data-datekey="${dk}">
+            <div class="month-cal-day-num">${d}</div>
+          </div>`;
+      }
+    }
+
+    container.innerHTML = `
+      ${summaryHtml}
+      ${dowHtml}
+      <div class="month-cal-grid">${cells}</div>`;
   }
 
   // ── View Switching ───────────────────────────────────
