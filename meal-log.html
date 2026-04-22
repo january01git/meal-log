@@ -658,8 +658,8 @@
       font-family: -apple-system, "SF Pro Display", BlinkMacSystemFont, sans-serif;
       font-size: 72px;
       font-weight: 700;
-      color: rgba(255,255,255,0.2);
-      text-shadow: 0 2px 20px rgba(0,0,0,0.1);
+      color: rgba(255,255,255,0.7);
+      text-shadow: 0 2px 20px rgba(0,0,0,0.35);
       letter-spacing: 4px;
       font-variant-numeric: tabular-nums;
       -webkit-font-smoothing: antialiased;
@@ -1406,7 +1406,7 @@
       ctx.textBaseline = 'middle';
       ctx.shadowColor = 'rgba(0,0,0,0.45)';
       ctx.shadowBlur = Math.round(fs * 0.12);
-      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
       ctx.fillText(timeOverlay, w / 2, h / 2);
       ctx.restore();
     }
