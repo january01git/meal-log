@@ -655,8 +655,9 @@
     }
     #time-overlay.hidden { display: none; }
     #time-overlay-text {
+      font-family: "Corporate Logo", "Corporate Logo rounded", sans-serif;
       font-size: 72px;
-      font-weight: 200;
+      font-weight: 700;
       color: #fff;
       text-shadow: 0 2px 20px rgba(0,0,0,0.5);
       letter-spacing: 4px;
@@ -1400,7 +1401,7 @@
     if (timeOverlay) {
       const fs = Math.round(Math.min(w, h) * 0.27);
       ctx.save();
-      ctx.font = `700 ${fs}px "Futura", "Century Gothic", "Trebuchet MS", Arial, sans-serif`;
+      ctx.font = `700 ${fs}px "Corporate Logo", "Corporate Logo rounded", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.shadowColor = 'rgba(0,0,0,0.45)';
