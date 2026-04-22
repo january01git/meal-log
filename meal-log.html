@@ -621,25 +621,48 @@
     }
     #capture-view.hidden { display: none; }
 
+    #camera-area {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      min-height: 0;
+      background: #000;
+    }
     #camera-preview {
       width: 100%;
-      flex: 1;
+      height: 100%;
       object-fit: cover;
       display: block;
-      background: #000;
-      min-height: 0;
     }
     #camera-preview.hidden { display: none; }
 
     #captured-img {
       width: 100%;
-      flex: 1;
+      height: 100%;
       object-fit: contain;
-      background: #000;
       display: block;
-      min-height: 0;
     }
     #captured-img.hidden { display: none; }
+
+    /* 撮影時刻オーバーレイ */
+    #time-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    #time-overlay.hidden { display: none; }
+    #time-overlay-text {
+      font-size: 72px;
+      font-weight: 200;
+      color: #fff;
+      text-shadow: 0 2px 20px rgba(0,0,0,0.5);
+      letter-spacing: 4px;
+      font-variant-numeric: tabular-nums;
+      -webkit-font-smoothing: antialiased;
+    }
 
     #photo-canvas { display: none; }
 
@@ -1087,15 +1110,20 @@
 
   <!-- Capture Overlay -->
   <div id="capture-view" class="hidden">
-    <video id="camera-preview" autoplay playsinline muted></video>
-    <img id="captured-img" class="hidden" alt="撮影した写真">
+    <div id="camera-area">
+      <video id="camera-preview" autoplay playsinline muted></video>
+      <img id="captured-img" class="hidden" alt="撮影した写真">
+      <div id="time-overlay" class="hidden">
+        <div id="time-overlay-text"></div>
+      </div>
+    </div>
     <canvas id="photo-canvas"></canvas>
 
     <div class="capture-bottom">
       <div class="capture-actions" id="camera-controls">
         <label id="upload-label">
           📁 ライブラリ
-          <input type="file" id="upload-input" accept="image/*">
+          <input type="file" id="upload-input" accept="image/*" multiple>
         </label>
         <button id="snap-btn" aria-label="撮影"></button>
         <button class="cap-btn" id="switch-btn" aria-label="カメラ切替">🔄</button>
@@ -1160,6 +1188,7 @@
     cameraStream: null,
     facingMode: 'environment',
     capturedDataUrl: null,
+    capturedTimestamp: null,  // EXIFから取得した撮影日時
     editingId: null,
     editingTimeId: null,
   };
@@ -1570,6 +1599,83 @@
     document.getElementById('lightbox-img').src = '';
   }
 
+  // ── EXIF Date Reader ─────────────────────────────────
+  async function readExifDate(file) {
+    try {
+      const buf = await file.slice(0, 131072).arrayBuffer();
+      const view = new DataView(buf);
+      if (view.getUint16(0) !== 0xFFD8) return null;
+      let off = 2;
+      while (off + 4 <= view.byteLength) {
+        const marker = view.getUint16(off);
+        const size   = view.getUint16(off + 2);
+        if (marker === 0xFFE1 &&
+            view.getUint32(off + 4) === 0x45786966 &&
+            view.getUint16(off + 8) === 0x0000) {
+          const tiff = off + 10;
+          const le   = view.getUint16(tiff) === 0x4949;
+          const r16  = o => view.getUint16(tiff + o, le);
+          const r32  = o => view.getUint32(tiff + o, le);
+          const ifd0 = r32(4);
+          const n    = r16(ifd0);
+          for (let i = 0; i < n; i++) {
+            const e = ifd0 + 2 + i * 12;
+            if (r16(e) === 0x8769) {           // ExifIFD
+              const ei = r32(e + 8);
+              const en = r16(ei);
+              for (let j = 0; j < en; j++) {
+                const ee = ei + 2 + j * 12;
+                if (r16(ee) === 0x9003) {      // DateTimeOriginal
+                  const so = tiff + r32(ee + 8);
+                  let s = '';
+                  for (let k = 0; k < 19; k++) s += String.fromCharCode(view.getUint8(so + k));
+                  return s;                    // "YYYY:MM:DD HH:MM:SS"
+                }
+              }
+            }
+          }
+        }
+        if ((marker & 0xFF00) !== 0xFF00) break;
+        off += 2 + size;
+      }
+    } catch {}
+    return null;
+  }
+
+  function exifDateToDate(s) {
+    // "YYYY:MM:DD HH:MM:SS" → Date
+    if (!s) return null;
+    const [d, t] = s.split(' ');
+    if (!d || !t) return null;
+    const [y, mo, dy] = d.split(':');
+    const [h, mi, se] = t.split(':');
+    const dt = new Date(+y, +mo - 1, +dy, +h, +mi, +se);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
+  // ── Time Overlay ─────────────────────────────────────
+  let _timeOverlayTimer = null;
+
+  function startTimeOverlay() {
+    const overlay = document.getElementById('time-overlay');
+    const text    = document.getElementById('time-overlay-text');
+    overlay.classList.remove('hidden');
+    const tick = () => {
+      const now = new Date();
+      text.textContent =
+        String(now.getHours()).padStart(2,'0') + ':' +
+        String(now.getMinutes()).padStart(2,'0');
+    };
+    tick();
+    _timeOverlayTimer = setInterval(tick, 1000);
+  }
+
+  function stopTimeOverlay() {
+    clearInterval(_timeOverlayTimer);
+    _timeOverlayTimer = null;
+    document.getElementById('time-overlay').classList.add('hidden');
+  }
+
   // ── Camera ───────────────────────────────────────────
   let hasCameraSupport = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 
@@ -1584,6 +1690,7 @@
       const video = document.getElementById('camera-preview');
       video.srcObject = stream;
       await video.play().catch(() => {});
+      startTimeOverlay();
     } catch {
       hasCameraSupport = false;
       document.getElementById('camera-preview').classList.add('hidden');
@@ -1593,6 +1700,7 @@
   }
 
   function stopCamera() {
+    stopTimeOverlay();
     if (state.cameraStream) {
       state.cameraStream.getTracks().forEach(t => t.stop());
       state.cameraStream = null;
@@ -1638,7 +1746,8 @@
 
   function saveEntry() {
     if (!state.capturedDataUrl) return;
-    const now = new Date();
+    const now = state.capturedTimestamp || new Date();
+    state.capturedTimestamp = null;
     const entry = {
       id: String(Date.now()),
       timestamp: now.toISOString(),
@@ -1789,18 +1898,62 @@
       compressImage(document.getElementById('camera-preview'), handleCapture);
     });
 
-    // Upload
-    document.getElementById('upload-input').addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = ev => {
-        const img = new Image();
-        img.onload = () => compressImage(img, handleCapture);
-        img.src = ev.target.result;
-      };
-      reader.readAsDataURL(file);
+    // Upload（単数 or 複数）
+    document.getElementById('upload-input').addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files);
       e.target.value = '';
+      if (!files.length) return;
+
+      if (files.length === 1) {
+        // 単数：通常プレビューフロー（EXIF日時を保存しておく）
+        const file = files[0];
+        const exifDate = await readExifDate(file);
+        state.capturedTimestamp = exifDateToDate(exifDate) || new Date(file.lastModified) || null;
+        const reader = new FileReader();
+        reader.onload = ev => {
+          const img = new Image();
+          img.onload = () => compressImage(img, handleCapture);
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      } else {
+        // 複数：全件まとめて保存（EXIF日時使用・プレビューなし）
+        hideCaptureView();
+        showToast('⏳ 処理中...');
+        let count = 0;
+        for (const file of files) {
+          await new Promise(resolve => {
+            (async () => {
+              const exifDate = await readExifDate(file);
+              const ts = exifDateToDate(exifDate) || new Date(file.lastModified);
+              const reader = new FileReader();
+              reader.onload = ev => {
+                const img = new Image();
+                img.onload = () => compressImage(img, dataUrl => {
+                  const entry = {
+                    id: String(Date.now() + count),
+                    timestamp: ts.toISOString(),
+                    dateKey: ts.toLocaleDateString('sv'),
+                    photo: dataUrl,
+                    note: '',
+                  };
+                  addEntry(entry);
+                  state.currentDateKey  = entry.dateKey;
+                  state.currentMonthKey = entry.dateKey.slice(0, 7);
+                  count++;
+                  resolve();
+                });
+                img.src = ev.target.result;
+              };
+              reader.readAsDataURL(file);
+            })();
+          });
+        }
+        if (state.view === 'day') renderTimeline();
+        else if (state.view === 'week') renderWeekView();
+        else renderMonthView();
+        showToast(`✅ ${count}件の写真を追加しました`);
+      }
     });
 
     // Switch camera
@@ -1933,6 +2086,25 @@
     document.getElementById('lightbox').addEventListener('click', (e) => {
       if (e.target === document.getElementById('lightbox')) closeLightbox();
     });
+
+    // ④ 横スワイプで前後切り替え
+    (function() {
+      let sx = 0, sy = 0;
+      document.getElementById('app').addEventListener('touchstart', e => {
+        sx = e.touches[0].clientX;
+        sy = e.touches[0].clientY;
+      }, { passive: true });
+      document.getElementById('app').addEventListener('touchend', e => {
+        const dx = e.changedTouches[0].clientX - sx;
+        const dy = e.changedTouches[0].clientY - sy;
+        if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
+        if (!document.getElementById('capture-view').classList.contains('hidden')) return;
+        if (!document.getElementById('lightbox').classList.contains('hidden')) return;
+        if (!document.getElementById('settings-overlay').classList.contains('hidden')) return;
+        if (dx > 0) document.getElementById('prev-btn').click();
+        else        document.getElementById('next-btn').click();
+      }, { passive: true });
+    })();
 
     // Back button
     window.addEventListener('popstate', () => {
