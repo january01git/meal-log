@@ -1363,9 +1363,9 @@
     canvas.width = w; canvas.height = h;
     ctx.drawImage(source, 0, 0, w, h);
     if (timeOverlay) {
-      const fs = Math.round(Math.min(w, h) * 0.18);
+      const fs = Math.round(Math.min(w, h) * 0.27);
       ctx.save();
-      ctx.font = `200 ${fs}px -apple-system, "Helvetica Neue", Arial, sans-serif`;
+      ctx.font = `700 ${fs}px "Futura", "Century Gothic", "Trebuchet MS", Arial, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.shadowColor = 'rgba(0,0,0,0.45)';
