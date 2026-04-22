@@ -655,7 +655,7 @@
     }
     #time-overlay.hidden { display: none; }
     #time-overlay-text {
-      font-family: "Corporate Logo", "Corporate Logo rounded", sans-serif;
+      font-family: -apple-system, "SF Pro Display", BlinkMacSystemFont, sans-serif;
       font-size: 72px;
       font-weight: 700;
       color: #fff;
@@ -1401,7 +1401,7 @@
     if (timeOverlay) {
       const fs = Math.round(Math.min(w, h) * 0.27);
       ctx.save();
-      ctx.font = `700 ${fs}px "Corporate Logo", "Corporate Logo rounded", sans-serif`;
+      ctx.font = `700 ${fs}px -apple-system, "SF Pro Display", BlinkMacSystemFont, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.shadowColor = 'rgba(0,0,0,0.45)';
