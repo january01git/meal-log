@@ -1349,7 +1349,7 @@
   }
 
   // ── Image Compression ────────────────────────────────
-  function compressImage(source, callback) {
+  function compressImage(source, callback, timeOverlay) {
     const canvas = document.getElementById('photo-canvas');
     const ctx = canvas.getContext('2d');
     const MAX = 900;
@@ -1362,6 +1362,18 @@
     }
     canvas.width = w; canvas.height = h;
     ctx.drawImage(source, 0, 0, w, h);
+    if (timeOverlay) {
+      const fs = Math.round(Math.min(w, h) * 0.18);
+      ctx.save();
+      ctx.font = `200 ${fs}px -apple-system, "Helvetica Neue", Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(0,0,0,0.45)';
+      ctx.shadowBlur = Math.round(fs * 0.12);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(timeOverlay, w / 2, h / 2);
+      ctx.restore();
+    }
     callback(canvas.toDataURL('image/jpeg', 0.72));
   }
 
@@ -1895,7 +1907,9 @@
 
     // Snap
     document.getElementById('snap-btn').addEventListener('click', () => {
-      compressImage(document.getElementById('camera-preview'), handleCapture);
+      const now = new Date();
+      const timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+      compressImage(document.getElementById('camera-preview'), handleCapture, timeStr);
     });
 
     // Upload（単数 or 複数）
