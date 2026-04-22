@@ -710,6 +710,37 @@
     }
     #snap-btn:active { background: #ddd; }
 
+    #flash-btn {
+      background: #333;
+      color: #fff;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      border: none;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.12s;
+    }
+    #flash-btn.flash-on  { background: #FFD60A; color: #000; }
+    #flash-btn.flash-off { background: #333;    color: #fff; }
+
+    /* フラッシュ発光エフェクト */
+    #flash-overlay {
+      position: absolute;
+      inset: 0;
+      background: #fff;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.05s;
+    }
+    #flash-overlay.flash-fire { opacity: 1; }
+
     #upload-label {
       background: #333;
       color: #fff;
@@ -1116,6 +1147,7 @@
       <div id="time-overlay" class="hidden">
         <div id="time-overlay-text"></div>
       </div>
+      <div id="flash-overlay"></div>
     </div>
     <canvas id="photo-canvas"></canvas>
 
@@ -1126,7 +1158,10 @@
           <input type="file" id="upload-input" accept="image/*" multiple>
         </label>
         <button id="snap-btn" aria-label="撮影"></button>
-        <button class="cap-btn" id="switch-btn" aria-label="カメラ切替">🔄</button>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+          <button id="flash-btn" class="flash-off" aria-label="フラッシュ切替">⚡</button>
+          <button class="cap-btn" id="switch-btn" aria-label="カメラ切替" style="width:44px;height:44px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:20px;background:#333;color:#fff">🔄</button>
+        </div>
       </div>
       <div class="capture-actions" id="review-controls" style="display:none">
         <button class="cap-btn" id="retake-btn">撮り直す</button>
@@ -1688,6 +1723,38 @@
     document.getElementById('time-overlay').classList.add('hidden');
   }
 
+  // ── Flash ────────────────────────────────────────────
+  let _flashMode = 'off'; // 'off' | 'on'
+  let _torchTrack = null;
+
+  function setFlashMode(mode) {
+    _flashMode = mode;
+    const btn = document.getElementById('flash-btn');
+    if (mode === 'on') {
+      btn.classList.replace('flash-off', 'flash-on');
+      btn.textContent = '⚡';
+      applyTorch(true);
+    } else {
+      btn.classList.replace('flash-on', 'flash-off');
+      btn.textContent = '⚡';
+      applyTorch(false);
+    }
+  }
+
+  function applyTorch(on) {
+    if (_torchTrack && typeof _torchTrack.applyConstraints === 'function') {
+      _torchTrack.applyConstraints({ advanced: [{ torch: on }] }).catch(() => {});
+    }
+  }
+
+  async function fireScreenFlash() {
+    // トーチ非対応の場合は画面白フラッシュで代替
+    const overlay = document.getElementById('flash-overlay');
+    overlay.classList.add('flash-fire');
+    await new Promise(r => setTimeout(r, 80));
+    overlay.classList.remove('flash-fire');
+  }
+
   // ── Camera ───────────────────────────────────────────
   let hasCameraSupport = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 
@@ -1699,6 +1766,8 @@
         video: { facingMode: { ideal: state.facingMode }, width: { ideal: 1280 }, height: { ideal: 960 } }
       });
       state.cameraStream = stream;
+      _torchTrack = stream.getVideoTracks()[0] || null;
+      if (_flashMode === 'on') applyTorch(true);
       const video = document.getElementById('camera-preview');
       video.srcObject = stream;
       await video.play().catch(() => {});
@@ -1713,6 +1782,8 @@
 
   function stopCamera() {
     stopTimeOverlay();
+    applyTorch(false);
+    _torchTrack = null;
     if (state.cameraStream) {
       state.cameraStream.getTracks().forEach(t => t.stop());
       state.cameraStream = null;
@@ -1906,10 +1977,18 @@
     document.getElementById('add-btn').addEventListener('click', showCaptureView);
 
     // Snap
-    document.getElementById('snap-btn').addEventListener('click', () => {
+    document.getElementById('snap-btn').addEventListener('click', async () => {
       const now = new Date();
       const timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+      if (_flashMode === 'on') {
+        await fireScreenFlash();
+      }
       compressImage(document.getElementById('camera-preview'), handleCapture, timeStr);
+    });
+
+    // Flash toggle
+    document.getElementById('flash-btn').addEventListener('click', () => {
+      setFlashMode(_flashMode === 'off' ? 'on' : 'off');
     });
 
     // Upload（単数 or 複数）
