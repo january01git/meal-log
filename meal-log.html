@@ -289,25 +289,30 @@
       font-size: 11px;
       color: #CCCCCC;
     }
-    /* 時刻インライン編集 */
+    /* 時刻・日付インライン編集 */
     .time-edit-row {
       display: flex;
-      align-items: center;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .time-edit-inputs {
+      display: flex;
       gap: 5px;
       flex-wrap: wrap;
     }
-    .card-time-input {
-      font-size: 15px;
+    .card-date-input, .card-time-input {
+      font-size: 13px;
       font-weight: 700;
       color: var(--text);
       border: 1.5px solid var(--accent);
       border-radius: 7px;
-      padding: 3px 7px;
+      padding: 4px 7px;
       font-family: inherit;
       outline: none;
       background: var(--bg);
       -webkit-appearance: none;
-      width: 92px;
+      flex: 1;
+      min-width: 0;
     }
     .time-save-btn, .time-cancel-btn {
       border: none;
@@ -1289,14 +1294,17 @@
     if (e) { e.note = note; saveEntries(state.entries); }
   }
 
-  function updateEntryTime(id, timeStr) {
-    // timeStr = "HH:MM"
+  function updateEntryTime(id, dateStr, timeStr) {
+    // dateStr = "YYYY-MM-DD", timeStr = "HH:MM"
     const e = state.entries.find(e => e.id === id);
-    if (!e || !timeStr) return;
-    const d = new Date(e.timestamp);
-    const [h, m] = timeStr.split(':').map(Number);
+    if (!e) return;
+    const baseDateStr = dateStr || e.dateKey;
+    const baseTimeStr = timeStr || formatTime(e.timestamp);
+    const [h, m] = baseTimeStr.split(':').map(Number);
+    const d = new Date(baseDateStr + 'T00:00:00');
     d.setHours(h, m, 0, 0);
     e.timestamp = d.toISOString();
+    e.dateKey   = baseDateStr;
     saveEntries(state.entries);
   }
 
@@ -1383,9 +1391,14 @@
               <div class="card-body">
                 ${state.editingTimeId === e.id ? `
                   <div class="time-edit-row">
-                    <input class="card-time-input" type="time" value="${formatTime(e.timestamp)}" data-id="${e.id}">
-                    <button class="time-save-btn" data-id="${e.id}">保存</button>
-                    <button class="time-cancel-btn" data-id="${e.id}">✕</button>
+                    <div class="time-edit-inputs">
+                      <input class="card-date-input" type="date" value="${e.dateKey}" data-id="${e.id}">
+                      <input class="card-time-input" type="time" value="${formatTime(e.timestamp)}" data-id="${e.id}">
+                    </div>
+                    <div style="display:flex;gap:5px">
+                      <button class="time-save-btn" data-id="${e.id}">保存</button>
+                      <button class="time-cancel-btn" data-id="${e.id}">✕</button>
+                    </div>
                   </div>
                 ` : `
                   <div class="card-time-row js-time-edit" data-id="${e.id}">
@@ -1862,14 +1875,22 @@
         return;
       }
 
-      // 時刻保存
+      // 時刻・日付保存
       const timeSave = e.target.closest('.time-save-btn');
       if (timeSave) {
-        const inp = document.querySelector(`.card-time-input[data-id="${timeSave.dataset.id}"]`);
-        if (inp && inp.value) updateEntryTime(timeSave.dataset.id, inp.value);
+        const id = timeSave.dataset.id;
+        const dateInp = document.querySelector(`.card-date-input[data-id="${id}"]`);
+        const timeInp = document.querySelector(`.card-time-input[data-id="${id}"]`);
+        updateEntryTime(id, dateInp ? dateInp.value : null, timeInp ? timeInp.value : null);
         state.editingTimeId = null;
+        // 日付変更時はその日に移動
+        const updated = state.entries.find(e => e.id === id);
+        if (updated) {
+          state.currentDateKey  = updated.dateKey;
+          state.currentMonthKey = updated.dateKey.slice(0, 7);
+        }
         renderTimeline();
-        showToast('✅ 時刻を更新しました');
+        showToast('✅ 日時を更新しました');
         return;
       }
 
