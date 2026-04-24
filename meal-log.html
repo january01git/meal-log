@@ -1343,7 +1343,7 @@
 
   function saveEntries(arr) {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); }
-    catch { showToast('⚠️ ストレージ満杯です。古い記録を削除してください。'); }
+    catch { alert('⚠️ 保存に失敗しました。\nストレージが満杯の可能性があります。\n設定からバックアップを保存してください。'); }
   }
 
   function addEntry(e)   { state.entries.push(e); saveEntries(state.entries); }
@@ -1697,8 +1697,15 @@
     if (!d || !t) return null;
     const [y, mo, dy] = d.split(':');
     const [h, mi, se] = t.split(':');
-    const dt = new Date(+y, +mo - 1, +dy, +h, +mi, +se);
+    const year = +y;
+    if (year < 2000 || year > 2100) return null;
+    const dt = new Date(year, +mo - 1, +dy, +h, +mi, +se);
     return isNaN(dt.getTime()) ? null : dt;
+  }
+
+  function safeDateFromFile(file) {
+    const d = new Date(file.lastModified);
+    return d.getFullYear() >= 2000 ? d : new Date();
   }
 
   // ── Time Overlay ─────────────────────────────────────
@@ -1794,6 +1801,7 @@
   // ── Capture View ─────────────────────────────────────
   function showCaptureView() {
     state.capturedDataUrl = null;
+    state.capturedTimestamp = null;
     document.getElementById('capture-view').classList.remove('hidden');
     document.getElementById('app-header').style.display = 'none';
     document.getElementById('timeline-view').classList.add('hidden');
@@ -2002,7 +2010,7 @@
         // 単数：通常プレビューフロー（EXIF日時を保存しておく）
         const file = files[0];
         const exifDate = await readExifDate(file);
-        state.capturedTimestamp = exifDateToDate(exifDate) || new Date(file.lastModified) || null;
+        state.capturedTimestamp = exifDateToDate(exifDate) || safeDateFromFile(file);
         const reader = new FileReader();
         reader.onload = ev => {
           const img = new Image();
@@ -2019,7 +2027,7 @@
           await new Promise(resolve => {
             (async () => {
               const exifDate = await readExifDate(file);
-              const ts = exifDateToDate(exifDate) || new Date(file.lastModified);
+              const ts = exifDateToDate(exifDate) || safeDateFromFile(file);
               const reader = new FileReader();
               reader.onload = ev => {
                 const img = new Image();
