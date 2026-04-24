@@ -1195,6 +1195,7 @@
       機種変更や引き継ぎ時は、バックアップを保存して<br>
       新しいiPhoneで「復元」してください。
     </div>
+    <div id="storage-usage-bar" style="font-size:12px;color:#888;text-align:center;margin-bottom:12px;"></div>
     <div class="settings-btn-row">
       <button class="settings-action-btn settings-export-btn" id="export-btn">
         📥 バックアップを保存（JSONファイル）
@@ -1203,6 +1204,9 @@
         📤 バックアップから復元
         <input type="file" id="import-json-input" accept=".json,application/json">
       </label>
+      <button class="settings-action-btn" id="reset-btn" style="background:#FFF0F0;color:#E53E3E;border:1.5px solid #E53E3E;">
+        🗑 全データを削除して容量を空ける
+      </button>
       <button class="settings-action-btn settings-close-btn" id="settings-close-btn">閉じる</button>
     </div>
   </div>
@@ -1388,10 +1392,10 @@
   function compressImage(source, callback, timeOverlay) {
     const canvas = document.getElementById('photo-canvas');
     const ctx = canvas.getContext('2d');
-    const MAX = 900;
+    const MAX = 640;
     let w = source.naturalWidth || source.videoWidth;
     let h = source.naturalHeight || source.videoHeight;
-    if (!w || !h) { w = 900; h = 900; }
+    if (!w || !h) { w = 640; h = 640; }
     if (w > MAX || h > MAX) {
       if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
       else       { w = Math.round(w * MAX / h); h = MAX; }
@@ -1410,7 +1414,7 @@
       ctx.fillText(timeOverlay, w / 2, h / 2);
       ctx.restore();
     }
-    callback(canvas.toDataURL('image/jpeg', 0.72));
+    callback(canvas.toDataURL('image/jpeg', 0.62));
   }
 
   // ── Header Render ────────────────────────────────────
@@ -1902,8 +1906,24 @@
     reader.readAsText(file);
   }
 
+  function getStorageUsageMB() {
+    const data = localStorage.getItem(STORAGE_KEY) || '';
+    return (new Blob([data]).size / (1024 * 1024)).toFixed(1);
+  }
+
+  function resetAllData() {
+    if (!confirm('⚠️ 全データを削除します。\n必ずバックアップを保存してから実行してください。\n\n本当に削除しますか？')) return;
+    state.entries = [];
+    localStorage.removeItem(STORAGE_KEY);
+    showToast('✅ データを削除しました。容量が空きました。');
+    closeSettings();
+    renderTimeline();
+  }
+
   function openSettings() {
     document.getElementById('settings-overlay').classList.remove('hidden');
+    const mb = getStorageUsageMB();
+    document.getElementById('storage-usage-bar').textContent = `使用容量: 約${mb} MB / 5 MB`;
   }
 
   function closeSettings() {
@@ -1981,6 +2001,7 @@
     document.getElementById('import-json-input').addEventListener('change', (e) => {
       importData(e.target.files[0]);
     });
+    document.getElementById('reset-btn').addEventListener('click', resetAllData);
 
     // Add button
     document.getElementById('add-btn').addEventListener('click', showCaptureView);
