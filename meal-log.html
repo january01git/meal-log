@@ -1195,7 +1195,7 @@
       機種変更や引き継ぎ時は、バックアップを保存して<br>
       新しいiPhoneで「復元」してください。
     </div>
-    <div id="storage-usage-bar" style="font-size:12px;color:#888;text-align:center;margin-bottom:12px;"></div>
+    <div id="storage-usage-bar" style="font-size:12px;color:#888;text-align:center;margin-bottom:12px;">使用容量を計算中...</div>
     <div class="settings-btn-row">
       <button class="settings-action-btn settings-export-btn" id="export-btn">
         📥 バックアップを保存（JSONファイル）
@@ -1337,33 +1337,85 @@
     setTimeout(() => el.classList.remove('show'), 2400);
   }
 
-  // ── Storage ───────────────────────────────────────────
-  const STORAGE_KEY = 'meallog_v1';
+  // ── IndexedDB Storage ────────────────────────────────
+  const LS_KEY = 'meallog_v1';   // 移行元（旧localStorage）
+  const DB_NAME = 'meallog_db';
+  const DB_STORE = 'entries';
+  let _db = null;
 
-  function loadEntries() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
-    catch { return []; }
+  function openDB() {
+    if (_db) return Promise.resolve(_db);
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = ev => {
+        ev.target.result.createObjectStore(DB_STORE, { keyPath: 'id' });
+      };
+      req.onsuccess = ev => { _db = ev.target.result; resolve(_db); };
+      req.onerror   = () => reject(req.error);
+    });
   }
 
-  function saveEntries(arr) {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); }
-    catch { alert('⚠️ 保存に失敗しました。\nストレージが満杯の可能性があります。\n設定からバックアップを保存してください。'); }
+  async function loadEntriesFromDB() {
+    const db = await openDB();
+    return new Promise(resolve => {
+      const req = db.transaction(DB_STORE, 'readonly').objectStore(DB_STORE).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror   = () => resolve([]);
+    });
   }
 
-  function addEntry(e)   { state.entries.push(e); saveEntries(state.entries); }
+  function dbPut(entry) {
+    openDB().then(db => {
+      db.transaction(DB_STORE, 'readwrite').objectStore(DB_STORE).put(entry);
+    }).catch(() => {});
+  }
+
+  function dbDelete(id) {
+    openDB().then(db => {
+      db.transaction(DB_STORE, 'readwrite').objectStore(DB_STORE).delete(id);
+    }).catch(() => {});
+  }
+
+  function dbClear() {
+    return openDB().then(db => new Promise(resolve => {
+      const tx = db.transaction(DB_STORE, 'readwrite');
+      tx.objectStore(DB_STORE).clear();
+      tx.oncomplete = resolve;
+      tx.onerror    = resolve;
+    }));
+  }
+
+  // localStorage → IndexedDB 移行（初回のみ）
+  async function migrateFromLocalStorage() {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    try {
+      const entries = JSON.parse(raw);
+      if (entries.length) {
+        const db = await openDB();
+        const tx = db.transaction(DB_STORE, 'readwrite');
+        const store = tx.objectStore(DB_STORE);
+        for (const e of entries) store.put(e);
+        await new Promise(r => { tx.oncomplete = r; tx.onerror = r; });
+        showToast(`✅ ${entries.length}件のデータを新方式に移行しました`);
+      }
+      localStorage.removeItem(LS_KEY);
+    } catch {}
+  }
+
+  function addEntry(e)   { state.entries.push(e); dbPut(e); }
 
   function deleteEntry(id) {
     state.entries = state.entries.filter(e => e.id !== id);
-    saveEntries(state.entries);
+    dbDelete(id);
   }
 
   function updateEntryNote(id, note) {
     const e = state.entries.find(e => e.id === id);
-    if (e) { e.note = note; saveEntries(state.entries); }
+    if (e) { e.note = note; dbPut(e); }
   }
 
   function updateEntryTime(id, dateStr, timeStr) {
-    // dateStr = "YYYY-MM-DD", timeStr = "HH:MM"
     const e = state.entries.find(e => e.id === id);
     if (!e) return;
     const baseDateStr = dateStr || e.dateKey;
@@ -1373,7 +1425,7 @@
     d.setHours(h, m, 0, 0);
     e.timestamp = d.toISOString();
     e.dateKey   = baseDateStr;
-    saveEntries(state.entries);
+    dbPut(e);
   }
 
   function getEntriesForDate(key) {
@@ -1414,7 +1466,7 @@
       ctx.fillText(timeOverlay, w / 2, h / 2);
       ctx.restore();
     }
-    callback(canvas.toDataURL('image/jpeg', 0.62));
+    callback(canvas.toDataURL('image/jpeg', 0.50));
   }
 
   // ── Header Render ────────────────────────────────────
@@ -1894,7 +1946,7 @@
         const newEntries = imported.filter(e => e.id && !existingIds.has(e.id));
         state.entries = [...state.entries, ...newEntries]
           .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-        saveEntries(state.entries);
+        for (const e of newEntries) dbPut(e);
         showToast(`✅ ${newEntries.length}件を復元しました`);
         closeSettings();
         if (state.view === 'day') renderTimeline();
@@ -1906,24 +1958,26 @@
     reader.readAsText(file);
   }
 
-  function getStorageUsageMB() {
-    const data = localStorage.getItem(STORAGE_KEY) || '';
-    return (new Blob([data]).size / (1024 * 1024)).toFixed(1);
-  }
-
   function resetAllData() {
     if (!confirm('⚠️ 全データを削除します。\n必ずバックアップを保存してから実行してください。\n\n本当に削除しますか？')) return;
     state.entries = [];
-    localStorage.removeItem(STORAGE_KEY);
-    showToast('✅ データを削除しました。容量が空きました。');
+    dbClear();
+    showToast('✅ データを削除しました。');
     closeSettings();
     renderTimeline();
   }
 
   function openSettings() {
     document.getElementById('settings-overlay').classList.remove('hidden');
-    const mb = getStorageUsageMB();
-    document.getElementById('storage-usage-bar').textContent = `使用容量: 約${mb} MB / 5 MB`;
+    const bar = document.getElementById('storage-usage-bar');
+    bar.textContent = `記録 ${state.entries.length}件`;
+    if (navigator.storage && navigator.storage.estimate) {
+      navigator.storage.estimate().then(({ usage, quota }) => {
+        const usedMB = (usage / 1024 / 1024).toFixed(0);
+        const quotaGB = (quota / 1024 / 1024 / 1024).toFixed(1);
+        bar.textContent = `記録 ${state.entries.length}件 ／ 使用 ${usedMB} MB（上限 約${quotaGB} GB）`;
+      }).catch(() => {});
+    }
   }
 
   function closeSettings() {
@@ -1932,8 +1986,9 @@
   }
 
   // ── Event Wiring ─────────────────────────────────────
-  document.addEventListener('DOMContentLoaded', () => {
-    state.entries = loadEntries();
+  document.addEventListener('DOMContentLoaded', async () => {
+    await migrateFromLocalStorage();
+    state.entries = await loadEntriesFromDB();
     renderTimeline();
 
     // View toggle
